@@ -39,15 +39,15 @@ Location and ZIP code are based on your provider's network, so they're approxima
 
 **Map:** the map beside Location, ZIP code and Local IP. Tap it for a larger map. It uses OpenStreetMap and shows the approximate area of your provider's network, not your exact position.
 
-**Speed test:** the middle button shows download ↓ and upload ↑ speeds in Mbps, and ping (the delay, in milliseconds). Like speed test apps, it uses 4 connections at once in each direction and measures over time. It ignores the first half-second while the connections speed up, and stops once the speed has held steady for a second. The quick test runs when the app opens, for 1.5–4 seconds each way. It tests again only when your IP changes or the result is over 30 minutes old. Tap the button for download, upload, ping and jitter (how much the delay varies). Tap **Run again** there for a full test, which runs for 4–10 seconds each way. Ping and jitter use the browser's network timing where available, so Safari's own delays aren't counted. Data use depends on your speed: roughly 100–250 MB for a quick test on a 300 Mbps line, and more on faster lines. It uses Cloudflare's speed test servers.
+**Speed test:** the middle button shows download ↓ and upload ↑ speeds in Mbps, and ping (the delay, in milliseconds). The measuring is done by Cloudflare's own speed test engine ([@cloudflare/speedtest](https://github.com/cloudflare/speedtest) 1.14.1, MIT license), the code behind speed.cloudflare.com, hosted here under `vendor/cloudflare-speedtest`. Its reporting of results back to Cloudflare is switched off, and the packet loss test is left out. When the app opens, a quick test runs (about 15–20 seconds). It uses downloads up to 25 MB and uploads up to 25 MB, and grows them only until requests take over a second, so it uses at most about 200 MB on a gigabit line and less on slower ones. It tests again only when your IP changes or the result is over 30 minutes old. Tap the button for download, upload, ping, jitter, and ping while downloading and uploading. Tap **Run again** there for the full test, the same sequence speed.cloudflare.com runs. It can use over 1 GB on a gigabit line. Results should match speed.cloudflare.com. Apps such as Speedtest by Ookla often read higher, because they test against a server inside or next to your provider's network.
 
 ## Updating
 
-Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v17`).
+Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v18`).
 
 ## Privacy
 
-The map code (Leaflet 1.9.4, BSD 2-clause license) is hosted in this repository under `vendor/leaflet`, so it loads from GitHub Pages along with the page.
+The map code (Leaflet 1.9.4, BSD 2-clause license) and the speed test engine (Cloudflare speedtest 1.14.1, MIT license) are hosted in this repository under `vendor/`, so they load from GitHub Pages along with the page. The speed test engine's reporting of results to Cloudflare is switched off.
 
 
 The page has no accounts, cookies or analytics, and sends no names, emails or device details. Your IP history and last speed result are stored only on your device. Like any website, each service below sees your IP address when the page contacts it, plus the details listed.
@@ -61,6 +61,6 @@ The page has no accounts, cookies or analytics, and sends no names, emails or de
 | dns.google (backup: cloudflare-dns.com) | Hostname | Your IP, as the name being looked up |
 | api.open-meteo.com | Weather | Your IP and the approximate coordinates of your IP |
 | tile.openstreetmap.org | Map pictures | Your IP and which map area is shown |
-| speed.cloudflare.com | Speed test | Your IP, plus blank test data |
+| speed.cloudflare.com | Speed test | Your IP, plus blank test data (results aren't sent back) |
 
 Each service handles its records under its own privacy policy.
