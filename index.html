@@ -344,7 +344,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "22";
+  const APP_VERSION = "23";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -440,6 +440,12 @@
   const HOME_WORDS = /(broadband|cable|fiber|fibre|dsl|telephone|cooperative|co-op)/i;
   const HOME_ISP = /(comcast|xfinity|charter|spectrum|cox|at&t|verizon|frontier|centurylink|lumen|qwest|optimum|altice|suddenlink|windstream|mediacom|wideopenwest|wow!|rcn|astound|wave broadband|wave ?division|vanoppen|grande communications|sonic|google fiber|ziply|brightspeed|consolidated|tds|cable one|sparklight|rogers|bell canada|shaw|videotron|telus|cogeco|british telecom|bt |sky |virgin media|talktalk|telstra|optus|deutsche telekom|orange|free sas|bouygues|kpn|ziggo|swisscom|telenor|telia)/i;
 
+  // Words in the IP's hostname (reverse DNS) that providers use for mobile and for wired home service,
+  // e.g. TELUS: "nat-64-114-211-84.wireless.telus.com" (mobile) vs "d-154-20-120-221.bc.hsia.telus.net" (home).
+  // The provider name alone can't tell these apart when one company runs both.
+  const HOST_MOBILE = /(^|[.-])(wireless|mobile|mobility|cellular|lte|4g|5g|gprs|umts|wap|mob)([.-]|$)/i;
+  const HOST_HOME = /(^|[.-])(hsia|dsl|adsl|vdsl|cable|fiber|fibre|ftth|fttp|fios|res|resi|residential|dyn|dynamic|dhcp|cpe|broadband|hsd\d*|home)([.-]|\d|$)/i;
+
   // Returns [colour, label]. Colours: "alert" red, "caution" amber, "good" green, "" grey.
   function networkType(info, db) {
     const sec = info.security || {};
@@ -454,7 +460,10 @@
     if (type === "government" || GOVERNMENT.test(name)) return ["", "Government"];
     if (type === "banking" || BANKING.test(name)) return ["", "Banking"];
     if (SATELLITE.test(name)) return ["good", "Satellite"];
-    if ((db && db.is_mobile) || MOBILE.test(name)) return ["good", "Mobile network"];
+    const host = info.hostname || "";
+    if (HOST_MOBILE.test(host) || (db && db.is_mobile)) return ["good", "Mobile network"];
+    if (HOST_HOME.test(host)) return ["good", "Residential"];
+    if (MOBILE.test(name)) return ["good", "Mobile network"];
     if (type === "isp" || HOME_ISP.test(name)) return ["good", "Residential"];
     if (type === "business") return ["", "Business"];
     if (HOME_WORDS.test(name)) return ["good", "Residential"];
@@ -986,7 +995,7 @@
     showWeather(info);
     showMiniMap(info);
     autoSpeed(info);
-    reverseDns(info.ip).then(h => { if (current === info) $("domain").textContent = h || info.domain || ""; });
+    const hostLookup = reverseDns(info.ip).then(h => { info.hostname = h; if (current === info) $("domain").textContent = h || info.domain || ""; });
     $("copy").disabled = false;
     setStatus("ok", "Online");
     $("meta").textContent = `Checked ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · via ${info.src} · v${APP_VERSION}`;
@@ -994,6 +1003,8 @@
 
     let db = null;
     try { db = await getJSON("https://api.ipapi.is/"); } catch {}
+    await hostLookup; // the hostname helps tell mobile from home service (reverseDns gives up after a few seconds)
+    if (current !== info) return;
     const [netKind, net] = networkType(info, db);
     $("nettype").className = "nettype " + netKind;
     $("nettype").textContent = net;

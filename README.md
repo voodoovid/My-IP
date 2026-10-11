@@ -27,7 +27,7 @@ Location and ZIP code are based on your provider's network, so they're approxima
 
 **VPN check:** the page asks ipapi.is (a free VPN and proxy database), then makes its own checks on your phone. It looks for provider names that belong to data centers, VPN companies or iCloud Private Relay, and compares your phone's time zone with the IP's. It shows *Not detected*, *Possible* or *Likely*. That's a best guess and can't be certain.
 
-**Network type:** the tag under the Autonomous System number. It shows *Residential*, *Mobile network* or *Satellite* in green; *Data center* or *Relay / CDN* (for example iCloud Private Relay) in amber; *VPN*, *Proxy* or *Tor* in red; and *Business*, *Education*, *Government*, *Banking* or *Unknown type* in grey. It uses ipapi.is's classification of the company that owns the address when that service answers, and well-known provider names and words otherwise.
+**Network type:** the tag under the Autonomous System number. It shows *Residential*, *Mobile network* or *Satellite* in green; *Data center* or *Relay / CDN* (for example iCloud Private Relay) in amber; *VPN*, *Proxy* or *Tor* in red; and *Business*, *Education*, *Government*, *Banking* or *Unknown type* in grey. It uses ipapi.is's classification of the company that owns the address when that service answers. It also checks the IP's hostname for words providers use for mobile service (for example TELUS's `…wireless.telus.com`) or wired home service (for example `…hsia.telus.net`, `…hsd1…comcast.net`), which tells mobile from home when one company runs both under the same Autonomous System number. Otherwise it uses well-known provider names and words.
 
 **Local IP:** Safari doesn't give web pages access to your phone's local address, so on iPhone this usually shows *Hidden*, with a pointer to Settings › Wi‑Fi › ⓘ, where you can see it.
 
@@ -43,7 +43,7 @@ Location and ZIP code are based on your provider's network, so they're approxima
 
 ## Updating
 
-Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v22`).
+Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v23`).
 
 ## Privacy
 
