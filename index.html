@@ -176,6 +176,7 @@
   .sheet-head button { padding: 9px 14px; font-size: 15px; }
   .sheet-body { overflow: auto; min-height: 0; display: grid; gap: 14px; }
   .note { margin: 0; font: 400 13px/1.45 var(--sans); color: var(--muted); }
+  .note.diag { font: 400 11px/1.4 var(--mono); }
   #map { height: min(60vh, 520px); border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
   .speedrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: stretch; }
   .speedrow > button { min-width: 100px; padding: 0 14px; }
@@ -336,7 +337,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "16";
+  const APP_VERSION = "17";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -739,7 +740,7 @@
   // Safari's handling of each request isn't counted. Otherwise fall back to the whole request time.
   async function measureLatency(signal, n) {
     try { performance.setResourceTimingBufferSize(1000); performance.clearResourceTimings(); } catch {}
-    const times = [];
+    const times = []; let timed = 0, proto = "";
     for (let i = 0; i < n; i++) {
       const url = `${CF}/__down?bytes=0&r=${Math.random()}`;
       const t0 = performance.now();
@@ -747,7 +748,9 @@
       await r.arrayBuffer();
       let rtt = performance.now() - t0;
       const e = performance.getEntriesByName(r.url || url).pop();
+      if (e && e.nextHopProtocol) proto = e.nextHopProtocol;
       if (e && e.requestStart > 0 && e.responseStart > e.requestStart) {
+        timed++;
         rtt = e.responseStart - e.requestStart;
         const st = (e.serverTiming || []).find(x => x.name === "cfRequestDuration");
         if (st && st.duration < rtt) rtt -= st.duration;
@@ -760,7 +763,7 @@
     // Jitter: average change between one reading and the next, ignoring the single biggest jump.
     const diffs = t.slice(1).map((x, i) => Math.abs(x - t[i])).sort((a, b) => a - b).slice(0, -1);
     const jitter = diffs.length ? diffs.reduce((a, x) => a + x, 0) / diffs.length : 0;
-    return { ping, jitter };
+    return { ping, jitter, diag: { proto: proto || "unknown", timed, samples: n } };
   }
 
   // Throughput: several transfers at once, measured over time. The first half-second (while the
@@ -795,7 +798,8 @@
   }
   async function runMeter(signal, meter, worker, streams) {
     const ctl = linkAbort(signal);
-    const jobs = Array.from({ length: streams }, () => worker(ctl.signal).catch(() => {}));
+    let errors = 0;
+    const jobs = Array.from({ length: streams }, () => worker(ctl.signal).catch(() => { if (!ctl.signal.aborted) errors++; }));
     let result = { steady: false };
     while (!ctl.signal.aborted) {
       await new Promise(r => setTimeout(r, 250));
@@ -806,7 +810,7 @@
     ctl.abort();
     await Promise.all(jobs);
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-    return { rate, steady: !!result.steady };
+    return { rate, steady: !!result.steady, errors };
   }
   function measureDown(signal, minMs, maxMs, onRate) {
     const meter = steadyMeter(minMs, maxMs, onRate);
@@ -862,15 +866,16 @@
     renderSpeed();
     const [minMs, maxMs] = quick ? [1500, 4000] : [4000, 10000];
     try {
-      const { ping, jitter } = await measureLatency(signal, quick ? 14 : 26);
-      Object.assign(speed, { ping, jitter });
+      const { ping, jitter, diag } = await measureLatency(signal, quick ? 14 : 26);
+      Object.assign(speed, { ping, jitter, diag });
       speed.phase = "Measuring download…"; renderSpeed();
       const d = await measureDown(signal, minMs, maxMs, quick ? null : v => { speed.down = v; renderSpeed(); });
       speed.down = d.rate; speed.phase = "Measuring upload…"; renderSpeed();
       const u = await measureUp(signal, minMs, maxMs, quick ? null : v => { speed.up = v; renderSpeed(); });
+      speed.diag = { ...speed.diag, downErrors: d.errors, upErrors: u.errors };
       Object.assign(speed, { up: u.rate, stable: d.steady && u.steady,
         at: Date.now(), ip: current ? current.ip : "", isp: current ? current.isp : "", quick: !!quick });
-      try { localStorage.setItem(SPEED_KEY, JSON.stringify({ down: speed.down, up: speed.up, ping: speed.ping, jitter: speed.jitter, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick, stable: speed.stable })); } catch {}
+      try { localStorage.setItem(SPEED_KEY, JSON.stringify({ down: speed.down, up: speed.up, ping: speed.ping, jitter: speed.jitter, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick, stable: speed.stable, diag: speed.diag })); } catch {}
     } catch {
       if (!signal.aborted) speed.error = true;
       else Object.assign(speed, JSON.parse(localStorage.getItem(SPEED_KEY) || "{}"));
@@ -899,7 +904,8 @@
       const again = el("button", "primary", "Run again"); again.type = "button";
       const row = el("div", "speedrow"); row.append(again, stats);
       const status = el("p", "note", "");
-      body.append(row, status);
+      const diagLine = el("p", "note diag", "");
+      body.append(row, status, diagLine);
 
       const view = () => {
         if (!again.isConnected) { speedViews.delete(view); return; }
@@ -908,6 +914,9 @@
         png.textContent = speed.ping != null ? Math.round(speed.ping) : "—";
         jit.textContent = speed.jitter != null ? Math.round(speed.jitter) : "—";
         again.disabled = speed.running; again.textContent = speed.running ? "Testing…" : "Run again";
+        const g = speed.diag;
+        diagLine.textContent = g && !speed.running ? `Diagnostics: connection ${g.proto}, precise timing ${g.timed}/${g.samples}` +
+          `, failed transfers ${g.downErrors ?? "?"} down / ${g.upErrors ?? "?"} up · ${navigator.userAgent.match(/OS [\d_]+/)?.[0]?.replace(/_/g, ".") || ""}` : "";
         status.textContent = speed.running ? speed.phase
           : speed.error ? "The speed test server couldn't be reached. Check your connection and try again."
           : speed.at ? (speed.quick ? "Quick test" : "Full test") + (speed.stable ? " (steady)" : "") +
