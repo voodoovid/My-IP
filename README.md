@@ -33,7 +33,7 @@ Location and ZIP code are based on your provider's network, so they're approxima
 
 **Hostname:** the reverse-DNS name your provider gives your IP, looked up through Google's public DNS (with Cloudflare's as a backup). Shown under the provider.
 
-**Weather:** current temperature, conditions and wind at the IP's approximate location, from Open-Meteo, with an icon for the conditions and a wind icon when it's windy (15 mph or 24 km/h and over). Shown in °F and mph in the US, and °C and km/h elsewhere. The moon picture shows tonight's phase. It's calculated on the device, and its name appears beside it on iPad (on iPhone, press and hold the moon).
+**Weather:** current temperature, conditions and wind at the IP's approximate location, from Open-Meteo, with an icon for the conditions and a wind icon when it's windy (15 mph or 24 km/h and over). Shown in °F and mph in the US, and °C and km/h elsewhere. The moon picture shows tonight's phase. It's calculated on the device, and its name appears beside it on iPad. On iPhone only the picture is shown, to save space.
 
 **IP history:** tap the line under the IP. It lists the addresses this device has seen, with dates, and is stored only on the device (clearing Safari's website data clears it).
 
