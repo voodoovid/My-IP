@@ -115,7 +115,7 @@
     .dot { width: 10px; height: 10px; }
     :root { --ip-max: 112px; }
     .ip6 { font-size: 16px; }
-    .grid { flex: 1; min-height: 0; grid-auto-rows: 1fr; border-radius: 20px; }
+    .grid { flex: 1; grid-auto-rows: minmax(min-content, 1fr); border-radius: 20px; }
     .cell { padding: 22px 26px; gap: 10px; align-content: center; }
     .cell .v { font-size: 26px; }
     .cell .v.mono { font-size: 28px; }
@@ -127,20 +127,12 @@
     button { font-size: 21px; padding: 22px 16px; border-radius: 16px; }
     .meta { font-size: 14px; }
   }
-  /* Tablet landscape: IP and buttons on the left, details on the right. */
-  @media (min-width: 1000px) and (min-height: 700px) and (orientation: landscape) {
-    .screen {
-      display: grid; column-gap: 44px; row-gap: 24px;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      grid-template-rows: auto 1fr auto;
-      grid-template-areas: "head grid" "hero grid" "foot grid";
-    }
-    :root { --ip-max: 120px; }
-    header { grid-area: head; }
-    .hero { grid-area: hero; align-self: center; gap: 14px; }
-    .ip6 { font-size: 18px; }
-    footer { grid-area: foot; }
-    .grid { grid-area: grid; height: 100%; }
+  /* Tablet landscape: same single column, tighter so it fits the shorter screen. */
+  @media (min-width: 700px) and (min-height: 700px) and (orientation: landscape) {
+    :root { --ip-max: 88px; }
+    .screen { gap: 18px; padding-top: calc(env(safe-area-inset-top, 0px) + 24px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); }
+    .cell { padding: 12px 26px; gap: 6px; }
+    button { padding: 18px 16px; }
   }
   @media (prefers-reduced-motion: reduce) { .status.busy .dot { animation: none; } button:active { transform: none; } }
 </style>
