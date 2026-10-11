@@ -336,7 +336,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "15";
+  const APP_VERSION = "16";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -734,68 +734,106 @@
   let speedRun = null;
   const fmtMbps = v => v >= 100 ? String(Math.round(v)) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
 
-  async function measurePing(signal, n = 9) {
+  // Latency: many small requests. Where the browser exposes network timing (Resource Timing), use the
+  // time from sending the request to the first byte back, minus Cloudflare's own processing time, so
+  // Safari's handling of each request isn't counted. Otherwise fall back to the whole request time.
+  async function measureLatency(signal, n) {
+    try { performance.setResourceTimingBufferSize(1000); performance.clearResourceTimings(); } catch {}
     const times = [];
     for (let i = 0; i < n; i++) {
+      const url = `${CF}/__down?bytes=0&r=${Math.random()}`;
       const t0 = performance.now();
-      const r = await fetch(`${CF}/__down?bytes=0&r=${Math.random()}`, { cache: "no-store", signal });
+      const r = await fetch(url, { cache: "no-store", signal });
       await r.arrayBuffer();
-      times.push(performance.now() - t0);
-    }
-    const t = times.slice(1); // the first includes setting up the connection
-    const jitter = t.slice(1).reduce((a, x, i) => a + Math.abs(x - t[i]), 0) / Math.max(1, t.length - 1);
-    return { ping: Math.min(...t), jitter };
-  }
-  async function measureDown(signal, sizes, onRate) {
-    let rate = 0;
-    for (const size of sizes) {
-      const r = await fetch(`${CF}/__down?bytes=${size}&r=${Math.random()}`, { cache: "no-store", signal });
-      const reader = r.body.getReader();
-      const t0 = performance.now(); let got = 0;
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        got += value.length;
-        const ms = performance.now() - t0;
-        if (ms > 250) onRate(got * 8 / ms / 1000);
+      let rtt = performance.now() - t0;
+      const e = performance.getEntriesByName(r.url || url).pop();
+      if (e && e.requestStart > 0 && e.responseStart > e.requestStart) {
+        rtt = e.responseStart - e.requestStart;
+        const st = (e.serverTiming || []).find(x => x.name === "cfRequestDuration");
+        if (st && st.duration < rtt) rtt -= st.duration;
       }
-      const ms = performance.now() - t0;
-      rate = got * 8 / ms / 1000; onRate(rate);
-      if (ms > 1500) break; // long enough for a steady reading
+      times.push(rtt);
     }
-    return rate;
+    const t = times.slice(2); // the first requests include setting up the connection
+    const sorted = [...t].sort((a, b) => a - b);
+    const ping = sorted[Math.floor(sorted.length / 2)];
+    // Jitter: average change between one reading and the next, ignoring the single biggest jump.
+    const diffs = t.slice(1).map((x, i) => Math.abs(x - t[i])).sort((a, b) => a - b).slice(0, -1);
+    const jitter = diffs.length ? diffs.reduce((a, x) => a + x, 0) / diffs.length : 0;
+    return { ping, jitter };
   }
-  // Upload with growing samples until one takes at least `target` ms (or `max` bytes is reached).
-  // Small uploads finish before the connection gets up to speed and read too low.
-  async function measureUpSized(signal, ping, start, max, target) {
-    let size = start, rate = 0;
-    for (;;) {
-      const body = new Uint8Array(size);
-      const t0 = performance.now();
-      const r = await fetch(`${CF}/__up?r=${Math.random()}`, { method: "POST", body, cache: "no-store", signal });
-      await r.arrayBuffer();
-      const ms = Math.max(1, performance.now() - t0 - ping);
-      rate = size * 8 / ms / 1000;
-      if (ms >= target || size >= max) return { rate, size };
-      size = Math.min(max, size * 4);
-    }
+
+  // Throughput: several transfers at once, measured over time. The first half-second (while the
+  // connections speed up) is ignored. It stops once the last second's speed is within 10% of the
+  // second before (after `minMs`), or at `maxMs`.
+  function steadyMeter(minMs, maxMs, onRate) {
+    const start = performance.now(), points = []; // [time, bytes] samples
+    let bytes = 0, warm = null;
+    const rateBetween = (a, b) => (b[1] - a[1]) * 8 / Math.max(1, b[0] - a[0]) / 1000;
+    const at = ms => { for (let i = points.length - 1; i >= 0; i--) if (points[i][0] <= ms) return points[i]; return null; };
+    return {
+      add(n) { bytes += n; },
+      tick() {
+        const now = performance.now(), el = now - start;
+        points.push([now, bytes]);
+        if (!warm && el >= 500) warm = [now, bytes];
+        if (!warm) return { done: el >= maxMs };
+        const rate = rateBetween(warm, [now, bytes]);
+        onRate && onRate(rate);
+        const p1 = at(now - 1000), p2 = at(now - 2000);
+        const steady = el >= minMs && p1 && p2 && p2[0] >= warm[0] &&
+          Math.abs(rateBetween(p1, [now, bytes]) - rateBetween(p2, p1)) <= 0.1 * Math.max(rateBetween(p1, [now, bytes]), rateBetween(p2, p1));
+        return { done: el >= maxMs || steady, steady, rate };
+      },
+      final() { const now = performance.now(); return warm ? rateBetween(warm, [now, bytes]) : bytes * 8 / Math.max(1, now - start) / 1000; }
+    };
   }
-  async function measureUp(signal, ping, sizes, onRate) {
-    let rate = 0;
-    for (const size of sizes) {
-      const body = new Uint8Array(size);
-      const t0 = performance.now();
-      const r = await fetch(`${CF}/__up?r=${Math.random()}`, { method: "POST", body, cache: "no-store", signal });
-      await r.arrayBuffer();
-      const ms = Math.max(1, performance.now() - t0 - ping);
-      rate = size * 8 / ms / 1000; onRate(rate);
-      if (ms > 1500) break;
+  function linkAbort(parent) {
+    const ctl = new AbortController();
+    if (parent.aborted) ctl.abort(); else parent.addEventListener("abort", () => ctl.abort(), { once: true });
+    return ctl;
+  }
+  async function runMeter(signal, meter, worker, streams) {
+    const ctl = linkAbort(signal);
+    const jobs = Array.from({ length: streams }, () => worker(ctl.signal).catch(() => {}));
+    let result = { steady: false };
+    while (!ctl.signal.aborted) {
+      await new Promise(r => setTimeout(r, 250));
+      result = meter.tick();
+      if (result.done) break;
     }
-    return rate;
+    const rate = meter.final();
+    ctl.abort();
+    await Promise.all(jobs);
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+    return { rate, steady: !!result.steady };
+  }
+  function measureDown(signal, minMs, maxMs, onRate) {
+    const meter = steadyMeter(minMs, maxMs, onRate);
+    return runMeter(signal, meter, async sig => {
+      while (!sig.aborted) {
+        const r = await fetch(`${CF}/__down?bytes=50000000&r=${Math.random()}`, { cache: "no-store", signal: sig });
+        const reader = r.body.getReader();
+        for (;;) { const { done, value } = await reader.read(); if (done) break; meter.add(value.length); }
+      }
+    }, 4);
+  }
+  function measureUp(signal, minMs, maxMs, onRate) {
+    const meter = steadyMeter(minMs, maxMs, onRate);
+    return runMeter(signal, meter, async sig => {
+      let size = 1e6; // grows when chunks finish quickly, so request overhead doesn't hold the reading down
+      while (!sig.aborted) {
+        const t0 = performance.now();
+        const r = await fetch(`${CF}/__up?r=${Math.random()}`, { method: "POST", body: new Uint8Array(size), cache: "no-store", signal: sig });
+        await r.arrayBuffer();
+        meter.add(size);
+        if (performance.now() - t0 < 250 && size < 16e6) size *= 2;
+      }
+    }, 4);
   }
 
   // One shared speed result, shown on the main button and in the panel.
-  // The automatic test uses quick rounds; the panel's "Run again" runs the full test.
+  // The automatic test is the quick one; the panel's "Run again" runs the full test.
   const speed = { down: null, up: null, ping: null, jitter: null, phase: "", running: false, error: false, at: 0, ip: "" };
   const SPEED_KEY = "myip-speed";
   try { Object.assign(speed, JSON.parse(localStorage.getItem(SPEED_KEY)) || {}, { running: false, phase: "" }); } catch {}
@@ -814,42 +852,25 @@
     speedViews.forEach(f => f());
   }
 
-  // Quick test: measure ping once, then repeat download/upload rounds until two rounds in a row
-  // agree within 15% (at most 4 rounds), and show the average of those two.
-  // Full test (from the panel): one longer round.
-  const close = (a, b) => Math.abs(a - b) <= 0.15 * Math.max(a, b);
+  // Quick test (automatic): measures until the speed holds steady, at least 1.5 s and at most 4 s
+  // each way. Full test (Run again): at least 4 s and at most 10 s each way.
   async function runSpeed(quick) {
     if (speed.running) return;
     speedRun = new AbortController(); const { signal } = speedRun;
-    Object.assign(speed, { running: true, error: false, phase: "Measuring ping…", rounds: 0 },
+    Object.assign(speed, { running: true, error: false, phase: "Measuring ping…" },
       quick && speed.down != null ? {} : { down: null, up: null, ping: null, jitter: null });
     renderSpeed();
+    const [minMs, maxMs] = quick ? [1500, 4000] : [4000, 10000];
     try {
-      const { ping, jitter } = await measurePing(signal, quick ? 5 : 9);
+      const { ping, jitter } = await measureLatency(signal, quick ? 14 : 26);
       Object.assign(speed, { ping, jitter });
-      const downs = [], ups = [];
-      let upSize = 1e6; // the first quick round finds the right upload size; later rounds reuse it
-      const maxRounds = quick ? 4 : 1;
-      for (let i = 0; i < maxRounds; i++) {
-        speed.phase = quick ? `Round ${i + 1}: download…` : "Measuring download…"; renderSpeed();
-        downs.push(await measureDown(signal, quick ? [1e5, 1e6, 5e6] : [1e5, 1e6, 1e7, 2.5e7],
-          quick ? () => {} : v => { speed.down = v; renderSpeed(); }));
-        speed.phase = quick ? `Round ${i + 1}: upload…` : "Measuring upload…"; renderSpeed();
-        if (quick) {
-          const u = await measureUpSized(signal, ping, upSize, i === 0 ? 1e7 : upSize, 700);
-          upSize = u.size; ups.push(u.rate);
-        } else {
-          ups.push(await measureUp(signal, ping, [1e5, 1e6, 5e6, 1e7], v => { speed.up = v; renderSpeed(); }));
-        }
-        const n = downs.length;
-        speed.rounds = n;
-        if (n >= 2 && close(downs[n - 1], downs[n - 2]) && close(ups[n - 1], ups[n - 2])) break;
-      }
-      const last2 = arr => arr.length >= 2 ? (arr[arr.length - 1] + arr[arr.length - 2]) / 2 : arr[arr.length - 1];
-      Object.assign(speed, { down: last2(downs), up: last2(ups),
-        stable: !quick || (downs.length >= 2 && close(downs.at(-1), downs.at(-2)) && close(ups.at(-1), ups.at(-2))) });
-      Object.assign(speed, { at: Date.now(), ip: current ? current.ip : "", isp: current ? current.isp : "", quick: !!quick });
-      try { localStorage.setItem(SPEED_KEY, JSON.stringify({ down: speed.down, up: speed.up, ping: speed.ping, jitter: speed.jitter, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick, rounds: speed.rounds, stable: speed.stable })); } catch {}
+      speed.phase = "Measuring download…"; renderSpeed();
+      const d = await measureDown(signal, minMs, maxMs, quick ? null : v => { speed.down = v; renderSpeed(); });
+      speed.down = d.rate; speed.phase = "Measuring upload…"; renderSpeed();
+      const u = await measureUp(signal, minMs, maxMs, quick ? null : v => { speed.up = v; renderSpeed(); });
+      Object.assign(speed, { up: u.rate, stable: d.steady && u.steady,
+        at: Date.now(), ip: current ? current.ip : "", isp: current ? current.isp : "", quick: !!quick });
+      try { localStorage.setItem(SPEED_KEY, JSON.stringify({ down: speed.down, up: speed.up, ping: speed.ping, jitter: speed.jitter, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick, stable: speed.stable })); } catch {}
     } catch {
       if (!signal.aborted) speed.error = true;
       else Object.assign(speed, JSON.parse(localStorage.getItem(SPEED_KEY) || "{}"));
@@ -889,9 +910,9 @@
         again.disabled = speed.running; again.textContent = speed.running ? "Testing…" : "Run again";
         status.textContent = speed.running ? speed.phase
           : speed.error ? "The speed test server couldn't be reached. Check your connection and try again."
-          : speed.at ? (speed.quick ? `Quick test, ${speed.rounds} rounds${speed.stable ? ", stable" : ""}` : "Full test") +
+          : speed.at ? (speed.quick ? "Quick test" : "Full test") + (speed.stable ? " (steady)" : "") +
               ` at ${new Date(speed.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` +
-              (speed.isp ? ` on ${speed.isp}` : "") + ". Run again for a full test (about 10–40 MB)."
+              (speed.isp ? ` on ${speed.isp}` : "") + ". 4 connections each way. Run again for a longer, full test."
           : "";
       };
       speedViews.add(view);
