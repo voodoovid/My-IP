@@ -43,7 +43,7 @@ Location and ZIP code are based on your provider's network, so they're approxima
 
 ## Updating
 
-Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v11`).
+Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v12`).
 
 ## Privacy
 
@@ -57,7 +57,7 @@ The page has no accounts, cookies or analytics, and sends no names, emails or de
 | GitHub Pages | Hosts the page | Your IP |
 | ipwho.is (backups: ipapi.co, ipinfo.io) | IP, provider, location | Your IP |
 | api.ipapi.is | VPN check and network type | Your IP |
-| api6.ipify.org | IPv6 address | Your IP |
+| api6.ipify.org / api4.ipify.org | Your other address (IPv6, or IPv4 when IPv6 is your main one) | Your IP |
 | dns.google (backup: cloudflare-dns.com) | Hostname | Your IP, as the name being looked up |
 | api.open-meteo.com | Weather | Your IP and the approximate coordinates of your IP |
 | tile.openstreetmap.org | Map pictures | Your IP and which map area is shown |

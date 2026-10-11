@@ -66,13 +66,13 @@
   .status.busy .dot { animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .25; } }
 
-  .hero { display: grid; gap: 4px; justify-items: center; text-align: center;
+  .hero { display: grid; gap: 2px; justify-items: center; text-align: center;
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .ip {
     font: 700 var(--ip-max)/1.05 var(--mono); letter-spacing: -.02em; white-space: nowrap;
     font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin: 0;
   }
-  .ip6 { font: 500 12px/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+  .ip6 { font: 500 12px/1.2 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
   .ip6:empty { display: none; }
   .histline {
     font: 500 12px/1.3 var(--mono); color: var(--muted); background: none; border: 0; padding: 4px 8px;
@@ -334,7 +334,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "11";
+  const APP_VERSION = "12";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -905,7 +905,12 @@
       try { info = await src(); if (info && info.ip) break; } catch (e) { info = null; }
     }
     // A separate IPv6 check, shown only if it differs from the main address.
-    const v6 = fetch("https://api6.ipify.org", { cache: "no-store" }).then(r => r.text()).catch(() => "");
+    // The other address family: IPv6 when the main IP is IPv4, and IPv4 when it's IPv6.
+    // These services answer over that family only, so a failure means the connection doesn't have it.
+    const otherFamily = info && info.ip.includes(":") ? "IPv4" : "IPv6";
+    const otherCtl = new AbortController(); setTimeout(() => otherCtl.abort(), 6000);
+    const other = fetch(otherFamily === "IPv6" ? "https://api6.ipify.org" : "https://api4.ipify.org", { cache: "no-store", signal: otherCtl.signal })
+      .then(r => r.text()).catch(() => "");
 
     if (!info) {
       $("ip").textContent = "Unavailable";
@@ -951,8 +956,10 @@
     $("vpn").textContent = verdict;
     $("vpnWhy").textContent = why;
 
-    const ip6 = (await v6).trim();
-    $("ip6").textContent = ip6 && ip6.includes(":") && ip6 !== info.ip ? "IPv6 " + ip6 : "";
+    const ip2 = (await other).trim();
+    if (current !== info) return;
+    $("ip6").textContent = ip2 && ip2 !== info.ip && (otherFamily === "IPv6") === ip2.includes(":")
+      ? `${otherFamily} ${ip2}` : `No ${otherFamily} on this connection`;
   }
 
   // Largest font size (up to --ip-max) at which the IP fits on one line.
