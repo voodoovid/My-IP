@@ -39,11 +39,11 @@ Location and ZIP code are based on your provider's network, so they're approxima
 
 **Map:** the map beside Location, ZIP code and Local IP. Tap it for a larger map. It uses OpenStreetMap and shows the approximate area of your provider's network, not your exact position.
 
-**Speed test:** the middle button shows download ↓ and upload ↑ speeds in Mbps. When the app opens, it runs quick rounds until two rounds in a row agree within 15%, up to 4 rounds, then stops and shows their average. The first round picks an upload size that takes at least 0.7 seconds, so the reading isn't too low. A check usually uses about 15–50 MB. It tests again only when your IP changes or the result is over 30 minutes old. Tap the button for ping and jitter, and tap **Run again** there for a full test (about 10–40 MB). It uses Cloudflare's speed test servers.
+**Speed test:** the middle button shows download ↓ and upload ↑ speeds in Mbps, and jitter (how much the delay varies, in milliseconds). When the app opens, it runs quick rounds until two rounds in a row agree within 15%, up to 4 rounds, then stops and shows their average. The first round picks an upload size that takes at least 0.7 seconds, so the reading isn't too low. A check usually uses about 15–50 MB. It tests again only when your IP changes or the result is over 30 minutes old. Tap the button for ping and jitter, and tap **Run again** there for a full test (about 10–40 MB). It uses Cloudflare's speed test servers.
 
 ## Updating
 
-Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v12`).
+Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v13`).
 
 ## Privacy
 
