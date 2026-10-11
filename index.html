@@ -344,7 +344,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "24";
+  const APP_VERSION = "25";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -879,7 +879,12 @@
         loadedDown: speed.loadedDown, loadedUp: speed.loadedUp, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick, stalled: speed.stalled, diag: speed.diag })); } catch {}
     } catch {
       if (!signal.aborted) speed.error = true;
-      else Object.assign(speed, JSON.parse(localStorage.getItem(SPEED_KEY) || "{}"));
+      else {
+        // Cancelled: bring back the last saved result only if it was for the current IP.
+        let saved = {}; try { saved = JSON.parse(localStorage.getItem(SPEED_KEY)) || {}; } catch {}
+        if (saved.ip && current && saved.ip === current.ip) Object.assign(speed, saved);
+        else Object.assign(speed, { down: null, up: null, ping: null, jitter: null, loadedDown: null, loadedUp: null, at: 0, ip: "" });
+      }
     } finally {
       speed.running = false; speed.phase = ""; speed.testingIp = ""; speedRun = null; renderSpeed();
       // The IP changed while the quick test was running: test the new connection now.
@@ -993,6 +998,12 @@
     $("isp").textContent = info.isp || "—";
     $("domain").textContent = info.domain || "";
     current = info;
+    // New IP: the speed numbers belonged to the old connection, so clear them straight away
+    // (unless a test of this new IP is already running).
+    if (speed.ip && speed.ip !== info.ip && !(speed.running && speed.testingIp === info.ip)) {
+      Object.assign(speed, { down: null, up: null, ping: null, jitter: null, loadedDown: null, loadedUp: null, at: 0, ip: "" });
+      renderSpeed();
+    }
     $("asn").textContent = asn;
     $("zip").textContent = info.zip || "—";
     $("loc").textContent = "";
