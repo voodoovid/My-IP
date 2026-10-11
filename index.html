@@ -289,7 +289,21 @@
 </section>
 
 <script>
+  // Bump this and version.json together on every change, so Home Screen apps pick up the update.
+  const APP_VERSION = "6";
   const $ = id => document.getElementById(id);
+
+  // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
+  // version number (never cached) and reload with a new address when it differs.
+  async function checkForUpdate() {
+    try {
+      const r = await fetch("version.json?t=" + Date.now(), { cache: "no-store" });
+      const { v } = await r.json();
+      if (v && v !== APP_VERSION && new URLSearchParams(location.search).get("v") !== v)
+        location.replace(location.pathname + "?v=" + encodeURIComponent(v));
+    } catch {}
+  }
+  checkForUpdate();
 
   async function getJSON(url) {
     const ctrl = new AbortController();
@@ -743,7 +757,7 @@
     reverseDns(info.ip).then(h => { if (current === info) $("domain").textContent = h || info.domain || ""; });
     $("copy").disabled = false;
     setStatus("ok", "Online");
-    $("meta").textContent = `Checked ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · via ${info.src}`;
+    $("meta").textContent = `Checked ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · via ${info.src} · v${APP_VERSION}`;
     $("refresh").disabled = false;
 
     let db = null;
@@ -790,7 +804,7 @@
     setTimeout(() => ($("copy").textContent = "Copy IP"), 1500);
   });
   // Re-check when you come back to the app (e.g. after switching Wi-Fi / mobile data or turning a VPN on).
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) lookup(); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) { checkForUpdate(); lookup(); } });
 
   lookup();
 </script>
