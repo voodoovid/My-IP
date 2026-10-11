@@ -26,6 +26,7 @@
     --alert: #b23a1c;
     --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    --ip-max: 46px;
     color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
@@ -61,7 +62,7 @@
 
   .hero { display: grid; gap: 6px; }
   .ip {
-    font: 700 clamp(30px, 10vw, 46px)/1.05 var(--mono); letter-spacing: -.02em;
+    font: 700 var(--ip-max)/1.05 var(--mono); letter-spacing: -.02em; white-space: nowrap;
     font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin: 0;
   }
   .ip6 { font: 500 12px/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; min-height: 1.4em; }
@@ -102,6 +103,44 @@
     .cell { padding: 9px 12px; gap: 3px; }
     .cell .v { font-size: 15px; }
     button { padding: 12px; }
+  }
+  /* Tablets (iPad): fill the whole screen and scale everything up. */
+  @media (min-width: 700px) and (min-height: 700px) {
+    .screen {
+      height: 100%; max-width: none; gap: 28px;
+      padding: calc(env(safe-area-inset-top, 0px) + 36px) 44px calc(env(safe-area-inset-bottom, 0px) + 32px);
+    }
+    .spacer { display: none; }
+    .label, .status { font-size: 13px; }
+    .dot { width: 10px; height: 10px; }
+    :root { --ip-max: 112px; }
+    .ip6 { font-size: 16px; }
+    .grid { flex: 1; min-height: 0; grid-auto-rows: 1fr; border-radius: 20px; }
+    .cell { padding: 22px 26px; gap: 10px; align-content: center; }
+    .cell .v { font-size: 26px; }
+    .cell .v.mono { font-size: 28px; }
+    .cell .sub { font-size: 16px; }
+    .flag { font-size: 30px; margin-right: 10px; }
+    .verdict { font-size: 26px; gap: 12px; }
+    .verdict::before { width: 14px; height: 14px; }
+    .actions { gap: 16px; }
+    button { font-size: 21px; padding: 22px 16px; border-radius: 16px; }
+    .meta { font-size: 14px; }
+  }
+  /* Tablet landscape: IP and buttons on the left, details on the right. */
+  @media (min-width: 1000px) and (min-height: 700px) and (orientation: landscape) {
+    .screen {
+      display: grid; column-gap: 44px; row-gap: 24px;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      grid-template-rows: auto 1fr auto;
+      grid-template-areas: "head grid" "hero grid" "foot grid";
+    }
+    :root { --ip-max: 120px; }
+    header { grid-area: head; }
+    .hero { grid-area: hero; align-self: center; gap: 14px; }
+    .ip6 { font-size: 18px; }
+    footer { grid-area: foot; }
+    .grid { grid-area: grid; height: 100%; }
   }
   @media (prefers-reduced-motion: reduce) { .status.busy .dot { animation: none; } button:active { transform: none; } }
 </style>
@@ -336,6 +375,17 @@
     const ip6 = (await v6).trim();
     $("ip6").textContent = ip6 && ip6.includes(":") && ip6 !== info.ip ? "IPv6 " + ip6 : "";
   }
+
+  // Largest font size (up to --ip-max) at which the IP fits on one line.
+  function fitIp() {
+    const el = $("ip");
+    const max = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ip-max")) || 46;
+    const chars = Math.max(el.textContent.length, 7);
+    el.style.fontSize = Math.floor(Math.min(max, el.parentElement.clientWidth / (chars * 0.62))) + "px";
+  }
+  new MutationObserver(fitIp).observe($("ip"), { childList: true, characterData: true, subtree: true });
+  addEventListener("resize", fitIp);
+  fitIp();
 
   function localTime(tz) {
     try { return new Date().toLocaleTimeString([], { timeZone: tz, hour: "2-digit", minute: "2-digit" }); }
