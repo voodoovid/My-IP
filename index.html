@@ -344,7 +344,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "20";
+  const APP_VERSION = "21";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -756,8 +756,7 @@
       main.textContent = `↓${short(speed.down)} ↑${speed.up != null ? short(speed.up) : "…"}`;
       unit.textContent = speed.running ? "testing…"
         : "Mbps" + (speed.ping != null ? ` · ping ${Math.round(speed.ping)} ms` : ""); unit.hidden = false;
-    } else if (speed.error) { main.textContent = "Speed test"; unit.textContent = "failed · tap to retry"; unit.hidden = false; }
-    else { main.textContent = "Speed test"; unit.hidden = true; }
+    } else { main.textContent = "Speed test"; unit.hidden = true; }
     $("speed").setAttribute("aria-label", speed.down != null ? `Speed test: download ${fmtMbps(speed.down)}, upload ${speed.up != null ? fmtMbps(speed.up) : "pending"} megabits per second` +
       (speed.ping != null ? `, ping ${Math.round(speed.ping)} milliseconds` : "") : "Speed test");
     speedViews.forEach(f => f());
@@ -812,10 +811,8 @@
   async function runSpeed(quick) {
     if (speed.running) return;
     speedRun = new AbortController(); const { signal } = speedRun;
-    const testIp = current ? current.ip : "";
-    const sameIp = speed.ip === testIp;
-    Object.assign(speed, { running: true, error: false, errorMsg: "", interrupted: false, testingIp: testIp, phase: "Measuring ping…" },
-      quick && sameIp && speed.down != null ? {} : { down: null, up: null, ping: null, jitter: null, loadedDown: null, loadedUp: null });
+    Object.assign(speed, { running: true, error: false, phase: "Measuring ping…" },
+      quick && speed.down != null ? {} : { down: null, up: null, ping: null, jitter: null });
     renderSpeed();
     let errors = 0;
     try {
@@ -851,10 +848,8 @@
           if (n !== last) { last = n; lastAt = Date.now(); }
           else if (Date.now() - lastAt > 20000) { stalled = true; clearInterval(watchdog); engine.pause(); resolve(); }
         }, 2000);
-        // Never let one test run longer than 90 s (quick) or 3 minutes (full), whatever happens.
-        const limit = setTimeout(() => { stalled = true; clearInterval(watchdog); engine.pause(); resolve(); }, quick ? 90000 : 180000);
-        engine.onFinish = () => { clearInterval(watchdog); clearTimeout(limit); resolve(); };
-        signal.addEventListener("abort", () => { clearInterval(watchdog); clearTimeout(limit); engine.pause(); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
+        engine.onFinish = () => { clearInterval(watchdog); resolve(); };
+        signal.addEventListener("abort", () => { clearInterval(watchdog); engine.pause(); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
         engine.play();
       });
       const res = r();
@@ -866,36 +861,21 @@
         loadedDown: res.getDownLoadedLatency(), loadedUp: res.getUpLoadedLatency(),
         stalled, diag: { engine: "Cloudflare speedtest 1.14.1", proto: proto || "unknown",
           samples: (res.getUnloadedLatencyPoints() || []).length, errors },
-        at: Date.now(), ip: testIp, isp: current ? current.isp : "", quick: !!quick });
+        at: Date.now(), ip: current ? current.ip : "", isp: current ? current.isp : "", quick: !!quick });
       try { localStorage.setItem(SPEED_KEY, JSON.stringify({ down: speed.down, up: speed.up, ping: speed.ping, jitter: speed.jitter,
         loadedDown: speed.loadedDown, loadedUp: speed.loadedUp, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick, stalled: speed.stalled, diag: speed.diag })); } catch {}
-    } catch (e) {
-      if (!signal.aborted) { speed.error = true; speed.errorMsg = String((e && e.message) || e); }
-      else {
-        // Interrupted (app left, or the IP changed). Show the last saved result only if it was for this
-        // same IP, and mark it so the test runs again at the next chance.
-        let saved = {}; try { saved = JSON.parse(localStorage.getItem(SPEED_KEY)) || {}; } catch {}
-        if (saved.ip && current && saved.ip === current.ip) Object.assign(speed, saved);
-        else Object.assign(speed, { down: null, up: null, ping: null, jitter: null, loadedDown: null, loadedUp: null, at: 0 });
-        speed.interrupted = true;
-      }
+    } catch {
+      if (!signal.aborted) speed.error = true;
+      else Object.assign(speed, JSON.parse(localStorage.getItem(SPEED_KEY) || "{}"));
     } finally {
-      speed.running = false; speed.phase = ""; speed.testingIp = ""; speedRun = null; renderSpeed();
-      if (restartSpeed) { restartSpeed = false; setTimeout(() => current && autoSpeed(current), 0); }
+      speed.running = false; speed.phase = ""; speedRun = null; renderSpeed();
     }
   }
-  // Test when the app opens, and again when the IP changes, the last result is over 30 minutes old,
-  // or the last test failed or was interrupted. If the IP changes during a test, that test is stopped
-  // and a new one starts on the new connection.
-  let restartSpeed = false;
+  // Test when the app opens, and again when the IP changes or the last result is over 30 minutes old.
   function autoSpeed(info) {
-    if (document.hidden) return;
-    if (speed.running) {
-      if (speed.testingIp && speed.testingIp !== info.ip) { restartSpeed = true; stopSpeed(); }
-      return;
-    }
-    const fresh = speed.ip === info.ip && Date.now() - speed.at < 30 * 60 * 1000 && !speed.error && !speed.interrupted;
-    if (!fresh) runSpeed(true);
+    if (speed.running || document.hidden) return;
+    if (speed.ip === info.ip && Date.now() - speed.at < 30 * 60 * 1000) return;
+    runSpeed(true);
   }
   function stopSpeed() { if (speedRun && speed.running) speedRun.abort(); }
 
@@ -932,7 +912,7 @@
         const g = speed.diag;
         diagLine.textContent = g && g.engine && !speed.running ? `${g.engine} · connection ${g.proto} · ${g.samples} ping samples · ${g.errors} errors` : "";
         status.textContent = speed.running ? speed.phase
-          : speed.error ? "The speed test didn't finish" + (speed.errorMsg ? ` (${speed.errorMsg})` : "") + ". Check your connection and tap Run again."
+          : speed.error ? "The speed test server couldn't be reached. Check your connection and try again."
           : speed.at ? (speed.quick ? "Quick test" : "Full test") + (speed.stalled ? " (stopped early: a request stalled)" : "") +
               ` at ${new Date(speed.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` +
               (speed.isp ? ` on ${speed.isp.replace(/\.$/, "")}` : "") + (speed.loadedDown ? `. Ping while downloading ${Math.round(speed.loadedDown)} ms` +
