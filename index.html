@@ -61,7 +61,8 @@
   .status.busy .dot { animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .25; } }
 
-  .hero { display: grid; gap: 4px; justify-items: center; text-align: center; }
+  .hero { display: grid; gap: 4px; justify-items: center; text-align: center;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   .ip {
     font: 700 var(--ip-max)/1.05 var(--mono); letter-spacing: -.02em; white-space: nowrap;
     font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin: 0;
@@ -90,6 +91,7 @@
   .minimap {
     width: 116px; height: 58px; border-radius: 8px; overflow: hidden; pointer-events: none;
     border: 1px solid var(--line); background: var(--bg);
+    position: relative; z-index: 0; isolation: isolate;
   }
   .minimap:empty { visibility: hidden; }
   .minimap .leaflet-control-attribution { font-size: 7px; line-height: 1.2; padding: 0 3px; background: rgb(255 255 255 / .7); }
@@ -126,9 +128,9 @@
   .meta { text-align: center; font: 400 11px/1.4 var(--mono); color: var(--muted); }
 
   /* Pop-up panel for the map, speed test and IP history. */
-  .backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / .45); z-index: 10; }
+  .backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / .45); z-index: 1000; }
   .sheet {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; max-height: 88%;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1001; max-height: 88%;
     display: flex; flex-direction: column; background: var(--panel); color: var(--fg);
     border-radius: 18px 18px 0 0; border: 1px solid var(--line);
     padding: 16px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
@@ -139,9 +141,12 @@
   .sheet-body { overflow: auto; min-height: 0; display: grid; gap: 14px; }
   .note { margin: 0; font: 400 13px/1.45 var(--sans); color: var(--muted); }
   #map { height: min(60vh, 520px); border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
+  .speedrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: stretch; }
+  .speedrow > button { min-width: 100px; padding: 0 14px; }
   .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  .stat { background: var(--panel); padding: 14px 12px; display: grid; gap: 6px; }
-  .stat .num { font: 700 28px/1 var(--mono); font-variant-numeric: tabular-nums; }
+  .stat { background: var(--panel); padding: 10px 9px; display: grid; gap: 5px; min-width: 0; }
+  .stat .label { font-size: 10px; letter-spacing: .08em; }
+  .stat .num { font: 700 22px/1 var(--mono); font-variant-numeric: tabular-nums; }
   .stat .unit { font: 400 12px/1 var(--mono); color: var(--muted); }
   .hist-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .hist-list li { background: var(--panel); padding: 11px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; }
@@ -189,7 +194,10 @@
     .sheet { left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%);
       width: min(760px, 90vw); max-height: 86%; border-radius: 20px; padding: 24px; }
     .sheet-head h2 { font-size: 24px; }
-    .stat .num { font-size: 44px; }
+    .stat { padding: 16px 14px; gap: 8px; }
+    .stat .label { font-size: 12px; }
+    .stat .num { font-size: 40px; }
+    .speedrow > button { min-width: 170px; }
   }
   /* Tablet landscape: same single column, tighter so it fits the shorter screen. */
   @media (min-width: 700px) and (min-height: 700px) and (orientation: landscape) {
@@ -651,13 +659,14 @@
         c.append(el("span", "label", label), n, u); stats.append(c); return [n, u];
       };
       const [down] = stat("Download", "Mbps"), [up] = stat("Upload", "Mbps"), [png, pngUnit] = stat("Ping", "ms");
-      const start = el("button", "primary", "Start test"); start.type = "button";
-      const status = el("p", "note", "Tests your connection against Cloudflare's nearest server. Uses about 10–40 MB of data.");
-      body.append(stats, start, status);
+      const again = el("button", "primary", "Testing…"); again.type = "button";
+      const row = el("div", "speedrow"); row.append(again, stats);
+      const status = el("p", "note", "");
+      body.append(row, status);
 
-      start.addEventListener("click", async () => {
+      async function run() {
         speedRun = new AbortController(); const { signal } = speedRun;
-        start.disabled = true; start.textContent = "Testing…";
+        again.disabled = true; again.textContent = "Testing…";
         down.textContent = up.textContent = png.textContent = "—"; pngUnit.textContent = "ms";
         try {
           status.textContent = "Measuring ping…";
@@ -669,14 +678,16 @@
           const u = await measureUp(signal, ping, v => (up.textContent = fmtMbps(v)));
           down.textContent = fmtMbps(d); up.textContent = fmtMbps(u);
           status.textContent = `Finished at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` +
-            (current && current.isp ? ` on ${current.isp}.` : ".");
+            (current && current.isp ? ` on ${current.isp}` : "") + ". Uses about 10–40 MB of data per test.";
         } catch {
           if (!signal.aborted) status.textContent = "The speed test server couldn't be reached. Check your connection and try again.";
         } finally {
           speedRun = null;
-          if (start.isConnected) { start.disabled = false; start.textContent = "Run again"; }
+          if (again.isConnected) { again.disabled = false; again.textContent = "Run again"; }
         }
-      });
+      }
+      again.addEventListener("click", run);
+      run();
     });
   }
 
@@ -769,7 +780,13 @@
   $("copy").addEventListener("click", async () => {
     const ip = $("ip").textContent;
     try { await navigator.clipboard.writeText(ip); $("copy").textContent = "Copied"; }
-    catch { getSelection().selectAllChildren($("ip")); $("copy").textContent = "Selected"; }
+    catch {
+      const t = document.createElement("textarea");
+      t.value = ip; t.setAttribute("readonly", ""); t.style.cssText = "position:fixed;opacity:0;top:0;left:0";
+      document.body.append(t); t.select();
+      const ok = document.execCommand("copy"); t.remove(); getSelection().removeAllRanges();
+      $("copy").textContent = ok ? "Copied" : "Copy failed";
+    }
     setTimeout(() => ($("copy").textContent = "Copy IP"), 1500);
   });
   // Re-check when you come back to the app (e.g. after switching Wi-Fi / mobile data or turning a VPN on).
