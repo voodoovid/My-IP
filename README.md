@@ -1,6 +1,6 @@
 # My IP
 
-A one-screen page that shows your external IP address, internet provider, AS number, location and time zone. Built for iPhone, and works in any browser.
+A one-screen page that shows your external IP address, internet provider, hostname, Autonomous System, network type, VPN check, location, ZIP code, local time and weather. It also has a speed test, a map and an IP history. Built for iPhone and iPad, and works in any browser.
 
 ## Files
 
@@ -30,3 +30,13 @@ Location and ZIP code are based on your provider's network, so they're approxima
 **Network type:** shown under the AS number as *Residential*, *Mobile network*, *Business* or *Data center*. It comes from ipapi.is's classification of the company that owns the address, or from well-known provider names when that isn't available.
 
 **Local IP:** Safari doesn't give web pages access to your phone's local address, so on iPhone this usually shows *Hidden*, with a pointer to Settings › Wi‑Fi › ⓘ, where you can see it.
+
+**Hostname:** the reverse-DNS name your provider gives your IP, looked up through Google's public DNS (with Cloudflare's as a backup). Shown under the provider.
+
+**Weather:** current conditions at the IP's approximate location, from Open-Meteo. Shown in °F and mph in the US, and °C and km/h elsewhere.
+
+**IP history:** tap the line under the IP. It lists the addresses this device has seen, with dates, and is stored only on the device (clearing Safari's website data clears it).
+
+**Map:** tap the Location row. It uses OpenStreetMap and shows the approximate area of your provider's network, not your exact position.
+
+**Speed test:** measures download, upload and ping against Cloudflare's speed test servers. It only runs when you tap Start, and it uses about 10–40 MB of data.

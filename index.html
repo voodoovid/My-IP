@@ -38,6 +38,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     margin: 0; background: var(--bg); color: var(--fg);
@@ -46,7 +47,7 @@
   }
   .screen {
     min-height: 100%; max-width: 520px; margin: 0 auto;
-    display: flex; flex-direction: column; gap: 16px;
+    display: flex; flex-direction: column; gap: 12px;
     padding: calc(env(safe-area-inset-top, 0px) + 16px) 16px calc(env(safe-area-inset-bottom, 0px) + 14px);
   }
   header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -60,22 +61,35 @@
   .status.busy .dot { animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .25; } }
 
-  .hero { display: grid; gap: 6px; justify-items: center; text-align: center; }
+  .hero { display: grid; gap: 4px; justify-items: center; text-align: center; }
   .ip {
     font: 700 var(--ip-max)/1.05 var(--mono); letter-spacing: -.02em; white-space: nowrap;
     font-variant-numeric: tabular-nums; overflow-wrap: anywhere; margin: 0;
   }
-  .ip6 { font: 500 12px/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; min-height: 1.4em; }
+  .ip6 { font: 500 12px/1.4 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+  .ip6:empty { display: none; }
+  .histline {
+    font: 500 12px/1.3 var(--mono); color: var(--muted); background: none; border: 0; padding: 4px 8px;
+    border-radius: 999px; min-height: 0;
+  }
+  .histline:empty { display: none; }
+  .histline .go { color: var(--accent); font-weight: 600; }
+  .histline.changed { color: var(--caution); background: color-mix(in srgb, var(--caution) 14%, transparent); }
 
   .grid {
     display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
     background: var(--line); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
   }
-  .cell { background: var(--panel); padding: 12px 14px; display: grid; gap: 5px; align-content: start; min-width: 0; }
+  .cell { background: var(--panel); padding: 10px 14px; display: grid; gap: 5px; align-content: start; min-width: 0; }
   .cell.wide { grid-column: 1 / -1; }
   .cell .v { font: 600 16px/1.3 var(--sans); overflow-wrap: anywhere; }
   .cell .v.mono { font-family: var(--mono); font-size: 16px; }
   .cell .sub { font: 400 12px/1.35 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .more { font: 600 12px/1 var(--sans); color: var(--accent); }
+  .cell.tap { cursor: pointer; }
+  .cell.tap:active { background: color-mix(in srgb, var(--panel) 92%, var(--fg)); }
+  .cell.tap:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .flag { font-size: 19px; line-height: 1; margin-right: 6px; vertical-align: -2px; }
 
   .verdict { display: inline-flex; align-items: center; gap: 7px; font: 600 15px/1.2 var(--sans); }
@@ -93,7 +107,7 @@
   .spacer { flex: 1; }
 
   footer { display: grid; gap: 10px; }
-  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
   button {
     font: 600 16px/1 var(--sans); padding: 14px 12px; border-radius: 12px; cursor: pointer;
     border: 1px solid var(--line); background: var(--panel); color: var(--fg);
@@ -104,10 +118,38 @@
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .meta { text-align: center; font: 400 11px/1.4 var(--mono); color: var(--muted); }
 
+  /* Pop-up panel for the map, speed test and IP history. */
+  .backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / .45); z-index: 10; }
+  .sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 11; max-height: 88%;
+    display: flex; flex-direction: column; background: var(--panel); color: var(--fg);
+    border-radius: 18px 18px 0 0; border: 1px solid var(--line);
+    padding: 16px 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  }
+  .sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .sheet-head h2 { margin: 0; font: 700 19px/1.2 var(--sans); }
+  .sheet-head button { padding: 9px 14px; font-size: 15px; }
+  .sheet-body { overflow: auto; min-height: 0; display: grid; gap: 14px; }
+  .note { margin: 0; font: 400 13px/1.45 var(--sans); color: var(--muted); }
+  #map { height: min(60vh, 520px); border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .stat { background: var(--panel); padding: 14px 12px; display: grid; gap: 6px; }
+  .stat .num { font: 700 28px/1 var(--mono); font-variant-numeric: tabular-nums; }
+  .stat .unit { font: 400 12px/1 var(--mono); color: var(--muted); }
+  .hist-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .hist-list li { background: var(--panel); padding: 11px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; }
+  .hist-list .hip { font: 600 15px/1.3 var(--mono); overflow-wrap: anywhere; }
+  .hist-list .hwhen { font: 400 12px/1.3 var(--mono); color: var(--muted); text-align: right; }
+  .hist-list .hsub { grid-column: 1 / -1; font: 400 12px/1.35 var(--sans); color: var(--muted); }
+  .hist-list li.now .hip::after { content: "  now"; font: 600 11px/1 var(--sans); color: var(--accent); }
+
   @media (max-height: 620px) {
     .screen { gap: 12px; }
     .cell { padding: 9px 12px; gap: 3px; }
     .cell .v { font-size: 15px; }
+    .cell .sub { font-size: 11px; }
+    :root { --ip-max: 40px; }
+    .histline { padding: 2px 6px; }
     button { padding: 12px; }
   }
   /* Tablets (iPad): fill the whole screen and scale everything up. */
@@ -133,6 +175,12 @@
     .actions { gap: 16px; }
     button { font-size: 21px; padding: 22px 16px; border-radius: 16px; }
     .meta { font-size: 14px; }
+    .histline { font-size: 15px; padding: 6px 12px; }
+    .more { font-size: 16px; }
+    .sheet { left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%);
+      width: min(760px, 90vw); max-height: 86%; border-radius: 20px; padding: 24px; }
+    .sheet-head h2 { font-size: 24px; }
+    .stat .num { font-size: 44px; }
   }
   /* Tablet landscape: same single column, tighter so it fits the shorter screen. */
   @media (min-width: 700px) and (min-height: 700px) and (orientation: landscape) {
@@ -154,6 +202,7 @@
   <section class="hero">
     <p class="ip" id="ip">···</p>
     <div class="ip6" id="ip6"></div>
+    <button class="histline" id="hist" type="button"></button>
   </section>
 
   <section class="grid">
@@ -172,8 +221,8 @@
       <span class="verdict" id="vpn">Checking</span>
       <span class="sub" id="vpnWhy"></span>
     </div>
-    <div class="cell wide">
-      <span class="label">Location</span>
+    <div class="cell wide tap" id="locCell" role="button" tabindex="0" aria-label="Location. Show map">
+      <div class="row"><span class="label">Location</span><span class="more">Map ›</span></div>
       <span class="v" id="loc">—</span>
       <span class="sub" id="coords"></span>
     </div>
@@ -186,9 +235,15 @@
       <span class="v mono" id="lan">—</span>
       <span class="sub" id="lanWhy"></span>
     </div>
-    <div class="cell wide">
-      <span class="label">Time zone</span>
-      <span class="v" id="tz">—</span>
+    <div class="cell">
+      <span class="label">Local time</span>
+      <span class="v mono" id="tz">—</span>
+      <span class="sub" id="tzName"></span>
+    </div>
+    <div class="cell">
+      <span class="label">Weather</span>
+      <span class="v mono" id="wx">—</span>
+      <span class="sub" id="wxWhy"></span>
     </div>
   </section>
 
@@ -197,11 +252,21 @@
   <footer>
     <div class="actions">
       <button class="primary" id="copy" type="button" disabled>Copy IP</button>
+      <button id="speed" type="button">Speed test</button>
       <button id="refresh" type="button">Refresh</button>
     </div>
     <div class="meta" id="meta"></div>
   </footer>
 </main>
+
+<div class="backdrop" id="backdrop" hidden></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" hidden>
+  <div class="sheet-head">
+    <h2 id="sheetTitle"></h2>
+    <button id="sheetClose" type="button">Close</button>
+  </div>
+  <div class="sheet-body" id="sheetBody"></div>
+</section>
 
 <script>
   const $ = id => document.getElementById(id);
@@ -224,7 +289,7 @@
       const c = d.connection || {};
       return {
         ip: d.ip, type: d.type, city: d.city, region: d.region, country: d.country,
-        zip: d.postal, flag: d.flag && d.flag.emoji, lat: d.latitude, lon: d.longitude,
+        zip: d.postal, cc: d.country_code, flag: d.flag && d.flag.emoji, lat: d.latitude, lon: d.longitude,
         asn: c.asn, isp: c.isp || c.org, org: c.org, domain: c.domain,
         tz: d.timezone && d.timezone.id, security: d.security, src: "ipwho.is"
       };
@@ -234,7 +299,7 @@
       if (d.error) throw new Error(d.reason);
       return {
         ip: d.ip, type: d.version, city: d.city, region: d.region, country: d.country_name,
-        zip: d.postal, flag: flagFor(d.country_code), lat: d.latitude, lon: d.longitude,
+        zip: d.postal, cc: d.country_code, flag: flagFor(d.country_code), lat: d.latitude, lon: d.longitude,
         asn: d.asn, isp: d.org, tz: d.timezone, src: "ipapi.co"
       };
     },
@@ -244,7 +309,7 @@
       const [lat, lon] = (d.loc || ",").split(",");
       return {
         ip: d.ip, type: d.ip && d.ip.includes(":") ? "IPv6" : "IPv4",
-        city: d.city, region: d.region, country: d.country, zip: d.postal, flag: flagFor(d.country),
+        city: d.city, region: d.region, country: d.country, zip: d.postal, cc: d.country, flag: flagFor(d.country),
         lat, lon, asn: m ? m[1] : "", isp: m ? m[2] : d.org, tz: d.timezone, src: "ipinfo.io"
       };
     }
@@ -346,7 +411,249 @@
     }
   }
 
+  // ---------- Hostname (reverse DNS) ----------
+  function ptrName(ip) {
+    if (!ip.includes(":")) return ip.split(".").reverse().join(".") + ".in-addr.arpa";
+    // Expand IPv6 to 32 hex digits, then reverse them nibble by nibble.
+    const [head, tail = ""] = ip.split("::");
+    const h = head ? head.split(":") : [], t = tail ? tail.split(":") : [];
+    const groups = [...h, ...Array(8 - h.length - t.length).fill("0"), ...t];
+    return groups.map(g => g.padStart(4, "0")).join("").split("").reverse().join(".") + ".ip6.arpa";
+  }
+  async function reverseDns(ip) {
+    const name = ptrName(ip);
+    const tries = [
+      () => getJSON(`https://dns.google/resolve?name=${name}&type=PTR`),
+      () => fetch(`https://cloudflare-dns.com/dns-query?name=${name}&type=PTR`, { headers: { accept: "application/dns-json" } }).then(r => r.json())
+    ];
+    for (const t of tries) {
+      try {
+        const d = await t();
+        const a = (d.Answer || []).find(x => x.type === 12);
+        return a ? a.data.replace(/\.$/, "") : "";
+      } catch {}
+    }
+    return "";
+  }
+
+  // ---------- Weather (Open-Meteo, free, no key) ----------
+  const WX = [[[0], "Clear"], [[1], "Mostly clear"], [[2], "Partly cloudy"], [[3], "Cloudy"], [[45, 48], "Fog"],
+    [[51, 53, 55, 56, 57], "Drizzle"], [[61, 63, 65, 66, 67], "Rain"], [[71, 73, 75, 77], "Snow"],
+    [[80, 81, 82], "Showers"], [[85, 86], "Snow showers"], [[95, 96, 99], "Thunderstorm"]];
+  async function showWeather(info) {
+    $("wx").textContent = "—"; $("wxWhy").textContent = "";
+    if (!info.lat || !info.lon) return;
+    const us = ["US", "LR", "MM"].includes(String(info.cc || "").toUpperCase());
+    try {
+      const d = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${info.lat}&longitude=${info.lon}` +
+        `&current=temperature_2m,weather_code,wind_speed_10m` +
+        (us ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : ""));
+      if (current !== info) return;
+      const c = d.current;
+      const sky = (WX.find(([codes]) => codes.includes(c.weather_code)) || [, ""])[1];
+      $("wx").textContent = `${Math.round(c.temperature_2m)}°${us ? "F" : "C"}`;
+      $("wxWhy").textContent = [sky, `wind ${Math.round(c.wind_speed_10m)} ${us ? "mph" : "km/h"}`].filter(Boolean).join(" · ");
+    } catch { $("wxWhy").textContent = "Unavailable"; }
+  }
+
+  // ---------- IP history (kept only on this device) ----------
+  const HIST_KEY = "myip-history";
+  function loadHist() { try { return JSON.parse(localStorage.getItem(HIST_KEY)) || []; } catch { return []; } }
+  function saveHist(h) { try { localStorage.setItem(HIST_KEY, JSON.stringify(h.slice(0, 30))); } catch {} }
+  const fmtWhen = t => new Date(t).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const histEntry = info => ({ ip: info.ip, isp: info.isp || "", place: [info.city, info.region].filter(Boolean).join(", "), first: Date.now(), last: Date.now() });
+
+  function recordHist(info) {
+    const h = loadHist();
+    if (h[0] && h[0].ip === info.ip) h[0].last = Date.now();
+    else h.unshift(histEntry(info));
+    saveHist(h);
+    showHistLine(h);
+  }
+  function showHistLine(h) {
+    const btn = $("hist"); btn.className = "histline"; btn.textContent = "";
+    if (!h.length) return;
+    const recent = h.length > 1 && Date.now() - h[0].first < 15 * 60 * 1000;
+    const text = h.length === 1 ? "First check on this device"
+      : recent ? `Changed from ${h[1].ip}` : `Same IP since ${fmtWhen(h[0].first)}`;
+    if (recent) btn.classList.add("changed");
+    const go = document.createElement("span"); go.className = "go"; go.textContent = " · History ›";
+    btn.append(text, go);
+  }
+
+  // ---------- Pop-up panel ----------
+  let lastFocus = null;
+  const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+  function openSheet(title, build) {
+    lastFocus = document.activeElement;
+    $("sheetTitle").textContent = title;
+    $("sheetBody").replaceChildren();
+    $("backdrop").hidden = false; $("sheet").hidden = false;
+    build($("sheetBody"));
+    $("sheetClose").focus();
+  }
+  function closeSheet() {
+    if (speedRun) speedRun.abort();
+    $("backdrop").hidden = true; $("sheet").hidden = true; $("sheetBody").replaceChildren();
+    if (lastFocus) lastFocus.focus();
+  }
+  $("sheetClose").addEventListener("click", closeSheet);
+  $("backdrop").addEventListener("click", closeSheet);
+  addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
+
+  function openHistory() {
+    openSheet("IP history", body => {
+      const h = loadHist();
+      body.append(el("p", "note", "IP addresses this device has seen, newest first. Stored only on this device."));
+      const list = el("ul", "hist-list");
+      h.forEach((r, i) => {
+        const li = el("li", i === 0 ? "now" : "");
+        li.append(el("span", "hip", r.ip), el("span", "hwhen", fmtWhen(r.first)),
+          el("span", "hsub", [r.isp, r.place, r.last - r.first > 60000 ? "last seen " + fmtWhen(r.last) : ""].filter(Boolean).join(" · ")));
+        list.append(li);
+      });
+      body.append(list);
+      const clear = el("button", "", "Clear history"); clear.type = "button";
+      clear.addEventListener("click", () => {
+        if (!clear.dataset.sure) { clear.dataset.sure = "1"; clear.textContent = "Tap again to clear"; return; }
+        saveHist(current ? [histEntry(current)] : []);
+        closeSheet();
+        showHistLine(loadHist());
+      });
+      body.append(clear);
+    });
+  }
+
+  // Map: Leaflet + OpenStreetMap, loaded only when first opened.
+  let leafletReady = null;
+  function loadLeaflet() {
+    if (!leafletReady) leafletReady = new Promise((ok, fail) => {
+      const css = document.createElement("link");
+      css.rel = "stylesheet"; css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+      document.head.append(css);
+      const js = document.createElement("script");
+      js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+      js.onload = ok; js.onerror = () => { leafletReady = null; fail(); };
+      document.head.append(js);
+    });
+    return leafletReady;
+  }
+  function openMap() {
+    if (!current) return;
+    const place = [current.city, current.region, current.country].filter(Boolean).join(", ");
+    openSheet(place || "Location", async body => {
+      if (!current.lat || !current.lon) { body.append(el("p", "note", "No map position is available for this IP.")); return; }
+      const box = el("div"); box.id = "map"; body.append(box);
+      body.append(el("p", "note", "Approximate location of your provider's network, not your exact position."));
+      try {
+        await loadLeaflet();
+        if (!box.isConnected) return;
+        const lat = +current.lat, lon = +current.lon;
+        const map = L.map(box).setView([lat, lon], 11);
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© OpenStreetMap contributors" }).addTo(map);
+        const color = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+        L.circle([lat, lon], { radius: 4000, color, weight: 1, fillOpacity: .15 }).addTo(map);
+        L.circleMarker([lat, lon], { radius: 7, color: "#ffffff", weight: 2, fillColor: color, fillOpacity: 1 }).addTo(map);
+        setTimeout(() => map.invalidateSize(), 50);
+      } catch { box.replaceWith(el("p", "note", "The map couldn't load. Check your connection and try again.")); }
+    });
+  }
+
+  // ---------- Speed test (Cloudflare's public speed test servers) ----------
+  const CF = "https://speed.cloudflare.com";
+  let speedRun = null;
+  const fmtMbps = v => v >= 100 ? String(Math.round(v)) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
+
+  async function measurePing(signal, n = 9) {
+    const times = [];
+    for (let i = 0; i < n; i++) {
+      const t0 = performance.now();
+      const r = await fetch(`${CF}/__down?bytes=0&r=${Math.random()}`, { cache: "no-store", signal });
+      await r.arrayBuffer();
+      times.push(performance.now() - t0);
+    }
+    const t = times.slice(1); // the first includes setting up the connection
+    const jitter = t.slice(1).reduce((a, x, i) => a + Math.abs(x - t[i]), 0) / Math.max(1, t.length - 1);
+    return { ping: Math.min(...t), jitter };
+  }
+  async function measureDown(signal, onRate) {
+    let rate = 0;
+    for (const size of [1e5, 1e6, 1e7, 2.5e7]) {
+      const r = await fetch(`${CF}/__down?bytes=${size}&r=${Math.random()}`, { cache: "no-store", signal });
+      const reader = r.body.getReader();
+      const t0 = performance.now(); let got = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        got += value.length;
+        const ms = performance.now() - t0;
+        if (ms > 250) onRate(got * 8 / ms / 1000);
+      }
+      const ms = performance.now() - t0;
+      rate = got * 8 / ms / 1000; onRate(rate);
+      if (ms > 1500) break; // long enough for a steady reading
+    }
+    return rate;
+  }
+  async function measureUp(signal, ping, onRate) {
+    let rate = 0;
+    for (const size of [1e5, 1e6, 5e6, 1e7]) {
+      const body = new Uint8Array(size);
+      const t0 = performance.now();
+      const r = await fetch(`${CF}/__up?r=${Math.random()}`, { method: "POST", body, cache: "no-store", signal });
+      await r.arrayBuffer();
+      const ms = Math.max(1, performance.now() - t0 - ping);
+      rate = size * 8 / ms / 1000; onRate(rate);
+      if (ms > 1500) break;
+    }
+    return rate;
+  }
+
+  function openSpeed() {
+    openSheet("Speed test", body => {
+      const stats = el("div", "stats");
+      const stat = (label, unit) => {
+        const c = el("div", "stat"), n = el("span", "num", "—"), u = el("span", "unit", unit);
+        c.append(el("span", "label", label), n, u); stats.append(c); return [n, u];
+      };
+      const [down] = stat("Download", "Mbps"), [up] = stat("Upload", "Mbps"), [png, pngUnit] = stat("Ping", "ms");
+      const start = el("button", "primary", "Start test"); start.type = "button";
+      const status = el("p", "note", "Tests your connection against Cloudflare's nearest server. Uses about 10–40 MB of data.");
+      body.append(stats, start, status);
+
+      start.addEventListener("click", async () => {
+        speedRun = new AbortController(); const { signal } = speedRun;
+        start.disabled = true; start.textContent = "Testing…";
+        down.textContent = up.textContent = png.textContent = "—"; pngUnit.textContent = "ms";
+        try {
+          status.textContent = "Measuring ping…";
+          const { ping, jitter } = await measurePing(signal);
+          png.textContent = Math.round(ping); pngUnit.textContent = `ms · ±${Math.round(jitter)}`;
+          status.textContent = "Measuring download…";
+          const d = await measureDown(signal, v => (down.textContent = fmtMbps(v)));
+          status.textContent = "Measuring upload…";
+          const u = await measureUp(signal, ping, v => (up.textContent = fmtMbps(v)));
+          down.textContent = fmtMbps(d); up.textContent = fmtMbps(u);
+          status.textContent = `Finished at ${new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` +
+            (current && current.isp ? ` on ${current.isp}.` : ".");
+        } catch {
+          if (!signal.aborted) status.textContent = "The speed test server couldn't be reached. Check your connection and try again.";
+        } finally {
+          speedRun = null;
+          if (start.isConnected) { start.disabled = false; start.textContent = "Run again"; }
+        }
+      });
+    });
+  }
+
+  $("hist").addEventListener("click", openHistory);
+  $("speed").addEventListener("click", openSpeed);
+  $("locCell").addEventListener("click", openMap);
+  $("locCell").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openMap(); } });
+
   // ---------- Main ----------
+  let current = null;
+
   async function lookup() {
     $("refresh").disabled = true;
     setStatus("busy", "Checking");
@@ -376,13 +683,18 @@
     $("ip").textContent = info.ip;
     $("isp").textContent = info.isp || "—";
     $("domain").textContent = info.domain || "";
+    current = info;
     $("asn").textContent = asn;
     $("zip").textContent = info.zip || "—";
     $("loc").textContent = "";
     if (info.flag) { const f = document.createElement("span"); f.className = "flag"; f.textContent = info.flag; $("loc").append(f); }
     $("loc").append([info.city, info.region].filter(Boolean).join(", ") || "—");
     $("coords").textContent = [info.country, info.lat && info.lon ? `${(+info.lat).toFixed(3)}, ${(+info.lon).toFixed(3)}` : ""].filter(Boolean).join(" · ");
-    $("tz").textContent = info.tz ? `${info.tz} · ${localTime(info.tz)}` : "—";
+    $("tz").textContent = info.tz ? localTime(info.tz) : "—";
+    $("tzName").textContent = info.tz ? info.tz.replace(/_/g, " ") : "";
+    recordHist(info);
+    showWeather(info);
+    reverseDns(info.ip).then(h => { if (current === info) $("domain").textContent = h || info.domain || ""; });
     $("copy").disabled = false;
     setStatus("ok", "Online");
     $("meta").textContent = `Checked ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · via ${info.src}`;
