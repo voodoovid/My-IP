@@ -132,6 +132,7 @@
   .nettype:empty { display: none; }
   .nettype.good { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
   .nettype.caution { color: var(--caution); background: color-mix(in srgb, var(--caution) 16%, transparent); }
+  .nettype.alert { color: var(--alert); background: color-mix(in srgb, var(--alert) 14%, transparent); }
 
   /* Rows keep their natural height; any spare screen height is shared out between them. */
   .grid { flex: 1 0 auto; grid-auto-rows: auto; align-content: stretch; }
@@ -335,7 +336,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "13";
+  const APP_VERSION = "14";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -420,24 +421,36 @@
   }
 
   // ---------- Network type ----------
-  // Residential / mobile / business / data center. Uses ipapi.is's classification of the
-  // owning company when available, otherwise well-known provider names.
+  // What kind of network the IP belongs to. Uses ipapi.is's classification when it answers,
+  // and well-known provider names and words when it doesn't. Always returns a label.
   const MOBILE = /(wireless|mobile|mobility|cellular|t-mobile|tmobile|verizon wireless|cellco|at&t mobility|sprint|us cellular|vodafone|o2 |ee limited|three|telefonica moviles)/i;
+  const SATELLITE = /(starlink|space exploration|hughes|viasat|echostar|inmarsat|iridium|oneweb)/i;
+  const EDUCATION = /(universit|college|school|academ|institute of technology|\.edu\b|research and education|internet2|educational)/i;
+  const GOVERNMENT = /(government|\bcounty\b|\bcity of\b|\bstate of\b|department of|ministry|federal|municipal|\bgov\b|national guard)/i;
+  const BANKING = /(\bbank\b|bancorp|financial services|credit union)/i;
   // Words typical of home internet providers' names; used only when nothing more specific matched.
   const HOME_WORDS = /(broadband|cable|fiber|fibre|dsl|telephone|cooperative|co-op)/i;
-  const HOME_ISP = /(comcast|xfinity|charter|spectrum|cox|at&t|verizon|frontier|centurylink|lumen|qwest|optimum|altice|suddenlink|windstream|mediacom|wideopenwest|wow!|rcn|astound|wave broadband|wave ?division|vanoppen|grande communications|sonic|google fiber|ziply|brightspeed|consolidated|tds|cable one|sparklight|starlink|space exploration|hughes|viasat|rogers|bell canada|shaw|videotron|telus|cogeco|british telecom|bt |sky |virgin media|talktalk|telstra|optus|deutsche telekom|orange|free sas|bouygues|kpn|ziggo|swisscom|telenor|telia)/i;
+  const HOME_ISP = /(comcast|xfinity|charter|spectrum|cox|at&t|verizon|frontier|centurylink|lumen|qwest|optimum|altice|suddenlink|windstream|mediacom|wideopenwest|wow!|rcn|astound|wave broadband|wave ?division|vanoppen|grande communications|sonic|google fiber|ziply|brightspeed|consolidated|tds|cable one|sparklight|rogers|bell canada|shaw|videotron|telus|cogeco|british telecom|bt |sky |virgin media|talktalk|telstra|optus|deutsche telekom|orange|free sas|bouygues|kpn|ziggo|swisscom|telenor|telia)/i;
 
+  // Returns [colour, label]. Colours: "alert" red, "caution" amber, "good" green, "" grey.
   function networkType(info, db) {
+    const sec = info.security || {};
     const name = [info.isp, info.org, db && db.company && db.company.name, db && db.asn && db.asn.org].filter(Boolean).join(" ");
     const type = String((db && ((db.company && db.company.type) || (db.asn && db.asn.type))) || "").toLowerCase();
-    if ((db && db.is_datacenter) || type === "hosting" || HOSTING.test(name)) return ["caution", "Data center"];
+    if ((db && db.is_tor) || sec.tor) return ["alert", "Tor"];
+    if ((db && db.is_vpn) || sec.vpn) return ["alert", "VPN"];
+    if ((db && db.is_proxy) || sec.proxy) return ["alert", "Proxy"];
+    if (RELAY.test(name)) return ["caution", "Relay / CDN"];
+    if ((db && db.is_datacenter) || sec.hosting || type === "hosting" || HOSTING.test(name)) return ["caution", "Data center"];
+    if (type === "education" || EDUCATION.test(name)) return ["", "Education"];
+    if (type === "government" || GOVERNMENT.test(name)) return ["", "Government"];
+    if (type === "banking" || BANKING.test(name)) return ["", "Banking"];
+    if (SATELLITE.test(name)) return ["good", "Satellite"];
     if ((db && db.is_mobile) || MOBILE.test(name)) return ["good", "Mobile network"];
     if (type === "isp" || HOME_ISP.test(name)) return ["good", "Residential"];
     if (type === "business") return ["", "Business"];
-    if (type === "education") return ["", "Education"];
-    if (type === "government") return ["", "Government"];
     if (HOME_WORDS.test(name)) return ["good", "Residential"];
-    return ["", ""];
+    return ["", "Unknown type"];
   }
 
   function checkVpn(info, db) {
@@ -456,7 +469,8 @@
     if (a !== null && b !== null && a !== b) return ["caution", "Possible", "Phone and IP time zones differ"];
 
     const [, net] = networkType(info, db);
-    return ["good", "Not detected", net === "Residential" ? "Residential network" : net === "Mobile network" ? "Mobile network" : db ? "No VPN signs found" : "Basic checks only"];
+    return ["good", "Not detected", net === "Unknown type" ? (db ? "No VPN signs found" : "Basic checks only")
+      : net === "Mobile network" ? net : `${net} network`];
   }
 
   // ---------- Local IP ----------
