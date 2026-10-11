@@ -344,7 +344,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "23";
+  const APP_VERSION = "24";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -762,7 +762,7 @@
     if (speed.running && speed.down == null) { main.textContent = "Testing…"; unit.hidden = true; }
     else if (speed.down != null) {
       const short = v => v >= 10 ? String(Math.round(v)) : v.toFixed(1);
-      main.textContent = `↓${short(speed.down)} ↑${speed.up != null ? short(speed.up) : "…"}`;
+      main.textContent = `↓${short(speed.down)} ↑${speed.up != null ? short(speed.up) : speed.running ? "…" : "–"}`;
       unit.textContent = speed.running ? "testing…"
         : "Mbps" + (speed.ping != null ? ` · ping ${Math.round(speed.ping)} ms` : ""); unit.hidden = false;
     } else { main.textContent = "Speed test"; unit.hidden = true; }
@@ -819,8 +819,9 @@
   async function runSpeed(quick) {
     if (speed.running) return;
     speedRun = new AbortController(); const { signal } = speedRun;
-    Object.assign(speed, { running: true, error: false, phase: "Measuring ping…" },
-      quick && speed.down != null ? {} : { down: null, up: null, ping: null, jitter: null });
+    const testIp = current ? current.ip : "";
+    Object.assign(speed, { running: true, error: false, phase: "Measuring ping…", testingIp: testIp, testingQuick: !!quick },
+      quick && speed.down != null && speed.ip === testIp ? {} : { down: null, up: null, ping: null, jitter: null });
     renderSpeed();
     let errors = 0;
     try {
@@ -856,10 +857,12 @@
         const watchdog = setInterval(() => {
           let n = last; try { n = done(); } catch {}
           if (n !== last) { last = n; lastAt = Date.now(); }
-          else if (Date.now() - lastAt > 20000) { stalled = true; clearInterval(watchdog); engine.pause(); resolve(); }
-        }, 2000);
-        engine.onFinish = () => { clearInterval(watchdog); resolve(); };
-        signal.addEventListener("abort", () => { clearInterval(watchdog); engine.pause(); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
+          else if (Date.now() - lastAt > (quick ? 5000 : 20000)) { stalled = true; clearInterval(watchdog); clearTimeout(cap); engine.pause(); resolve(); }
+        }, 1000);
+        // The quick test never takes longer than 15 s, e.g. when connections hang after a network switch.
+        const cap = quick ? setTimeout(() => { stalled = true; clearInterval(watchdog); engine.pause(); resolve(); }, 15000) : null;
+        engine.onFinish = () => { clearInterval(watchdog); clearTimeout(cap); resolve(); };
+        signal.addEventListener("abort", () => { clearInterval(watchdog); clearTimeout(cap); engine.pause(); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
         engine.play();
       });
       const res = r();
@@ -871,19 +874,26 @@
         loadedDown: res.getDownLoadedLatency(), loadedUp: res.getUpLoadedLatency(),
         stalled, diag: { engine: "Cloudflare speedtest 1.14.1", proto: proto || "unknown",
           samples: (res.getUnloadedLatencyPoints() || []).length, errors },
-        at: Date.now(), ip: current ? current.ip : "", isp: current ? current.isp : "", quick: !!quick });
+        at: Date.now(), ip: testIp, isp: current ? current.isp : "", quick: !!quick });
       try { localStorage.setItem(SPEED_KEY, JSON.stringify({ down: speed.down, up: speed.up, ping: speed.ping, jitter: speed.jitter,
         loadedDown: speed.loadedDown, loadedUp: speed.loadedUp, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick, stalled: speed.stalled, diag: speed.diag })); } catch {}
     } catch {
       if (!signal.aborted) speed.error = true;
       else Object.assign(speed, JSON.parse(localStorage.getItem(SPEED_KEY) || "{}"));
     } finally {
-      speed.running = false; speed.phase = ""; speedRun = null; renderSpeed();
+      speed.running = false; speed.phase = ""; speed.testingIp = ""; speedRun = null; renderSpeed();
+      // The IP changed while the quick test was running: test the new connection now.
+      if (retestNewIp) { retestNewIp = false; if (current) setTimeout(() => autoSpeed(current), 0); }
     }
   }
   // Test when the app opens, and again when the IP changes or the last result is over 30 minutes old.
+  let retestNewIp = false;
   function autoSpeed(info) {
-    if (speed.running || document.hidden) return;
+    if (document.hidden) return;
+    if (speed.running) {
+      if (speed.testingQuick && speed.testingIp && speed.testingIp !== info.ip) { retestNewIp = true; stopSpeed(); }
+      return;
+    }
     if (speed.ip === info.ip && Date.now() - speed.at < 30 * 60 * 1000) return;
     runSpeed(true);
   }
@@ -1053,6 +1063,7 @@
     if (document.hidden) stopSpeed();
     else { checkForUpdate(); lookup(); }
   });
+  addEventListener("online", () => { if (!document.hidden) lookup(); });
 
   lookup();
 </script>
