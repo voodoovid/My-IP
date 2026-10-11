@@ -163,7 +163,7 @@
       <span class="sub" id="domain"></span>
     </div>
     <div class="cell">
-      <span class="label">AS number</span>
+      <span class="label">Autonomous System</span>
       <span class="v mono" id="asn">—</span>
       <span class="nettype" id="nettype"></span>
     </div>
@@ -279,7 +279,9 @@
   // Residential / mobile / business / data center. Uses ipapi.is's classification of the
   // owning company when available, otherwise well-known provider names.
   const MOBILE = /(wireless|mobile|mobility|cellular|t-mobile|tmobile|verizon wireless|cellco|at&t mobility|sprint|us cellular|vodafone|o2 |ee limited|three|telefonica moviles)/i;
-  const HOME_ISP = /(comcast|xfinity|charter|spectrum|cox|at&t|verizon|frontier|centurylink|lumen|qwest|optimum|altice|suddenlink|windstream|mediacom|wideopenwest|wow!|rcn|astound|sonic|google fiber|ziply|brightspeed|consolidated|tds|cable one|sparklight|starlink|space exploration|hughes|viasat|rogers|bell canada|shaw|videotron|telus|cogeco|british telecom|bt |sky |virgin media|talktalk|telstra|optus|deutsche telekom|orange|free sas|bouygues|kpn|ziggo|swisscom|telenor|telia)/i;
+  // Words typical of home internet providers' names; used only when nothing more specific matched.
+  const HOME_WORDS = /(broadband|cable|fiber|fibre|dsl|telephone|cooperative|co-op)/i;
+  const HOME_ISP = /(comcast|xfinity|charter|spectrum|cox|at&t|verizon|frontier|centurylink|lumen|qwest|optimum|altice|suddenlink|windstream|mediacom|wideopenwest|wow!|rcn|astound|wave broadband|wave ?division|vanoppen|grande communications|sonic|google fiber|ziply|brightspeed|consolidated|tds|cable one|sparklight|starlink|space exploration|hughes|viasat|rogers|bell canada|shaw|videotron|telus|cogeco|british telecom|bt |sky |virgin media|talktalk|telstra|optus|deutsche telekom|orange|free sas|bouygues|kpn|ziggo|swisscom|telenor|telia)/i;
 
   function networkType(info, db) {
     const name = [info.isp, info.org, db && db.company && db.company.name, db && db.asn && db.asn.org].filter(Boolean).join(" ");
@@ -290,6 +292,7 @@
     if (type === "business") return ["", "Business"];
     if (type === "education") return ["", "Education"];
     if (type === "government") return ["", "Government"];
+    if (HOME_WORDS.test(name)) return ["good", "Residential"];
     return ["", ""];
   }
 
