@@ -177,6 +177,13 @@
   .sheet-body { overflow: auto; min-height: 0; display: grid; gap: 14px; }
   .note { margin: 0; font: 400 13px/1.45 var(--sans); color: var(--muted); }
   .note.diag { font: 400 11px/1.4 var(--mono); }
+  .accurate { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .accurate-links { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .btnlink {
+    display: block; text-align: center; text-decoration: none; font: 600 15px/1 var(--sans);
+    padding: 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--accent);
+  }
+  .btnlink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   #map { height: min(60vh, 520px); border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
   .speedrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: stretch; }
   .speedrow > button { min-width: 100px; padding: 0 14px; }
@@ -337,7 +344,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "18";
+  const APP_VERSION = "19";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -816,6 +823,7 @@
       const r = () => engine.results;
       const mbps = bps => bps ? bps / 1e6 : null;
       engine.onError = () => { errors++; };
+      let stalled = false;
       engine.onResultsChange = ({ type } = {}) => {
         if (type === "latency") speed.phase = "Measuring ping…";
         else if (type === "download") speed.phase = "Measuring download…";
@@ -830,8 +838,18 @@
         renderSpeed();
       };
       await new Promise((resolve, reject) => {
-        engine.onFinish = resolve;
-        signal.addEventListener("abort", () => { engine.pause(); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
+        // If a request hangs (seen in Safari), stop after 20 s without a finished measurement and keep
+        // what was measured. Background ping checks during transfers don't count as progress.
+        const done = () => { const x = r(); return (x.getDownloadBandwidthPoints() || []).length +
+          (x.getUploadBandwidthPoints() || []).length + (x.getUnloadedLatencyPoints() || []).length; };
+        let last = -1, lastAt = Date.now();
+        const watchdog = setInterval(() => {
+          let n = last; try { n = done(); } catch {}
+          if (n !== last) { last = n; lastAt = Date.now(); }
+          else if (Date.now() - lastAt > 20000) { stalled = true; clearInterval(watchdog); engine.pause(); resolve(); }
+        }, 2000);
+        engine.onFinish = () => { clearInterval(watchdog); resolve(); };
+        signal.addEventListener("abort", () => { clearInterval(watchdog); engine.pause(); reject(new DOMException("Aborted", "AbortError")); }, { once: true });
         engine.play();
       });
       const res = r();
@@ -841,11 +859,11 @@
       Object.assign(speed, {
         down, up, ping: res.getUnloadedLatency(), jitter: res.getUnloadedJitter(),
         loadedDown: res.getDownLoadedLatency(), loadedUp: res.getUpLoadedLatency(),
-        stable: true, diag: { engine: "Cloudflare speedtest 1.14.1", proto: proto || "unknown",
+        stalled, diag: { engine: "Cloudflare speedtest 1.14.1", proto: proto || "unknown",
           samples: (res.getUnloadedLatencyPoints() || []).length, errors },
         at: Date.now(), ip: current ? current.ip : "", isp: current ? current.isp : "", quick: !!quick });
       try { localStorage.setItem(SPEED_KEY, JSON.stringify({ down: speed.down, up: speed.up, ping: speed.ping, jitter: speed.jitter,
-        loadedDown: speed.loadedDown, loadedUp: speed.loadedUp, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick, diag: speed.diag })); } catch {}
+        loadedDown: speed.loadedDown, loadedUp: speed.loadedUp, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick, stalled: speed.stalled, diag: speed.diag })); } catch {}
     } catch {
       if (!signal.aborted) speed.error = true;
       else Object.assign(speed, JSON.parse(localStorage.getItem(SPEED_KEY) || "{}"));
@@ -874,8 +892,15 @@
       const again = el("button", "primary", "Run again"); again.type = "button";
       const row = el("div", "speedrow"); row.append(again, stats);
       const status = el("p", "note", "");
+      const accurate = el("div", "accurate");
+      accurate.append(el("p", "note", "These numbers are an in-browser estimate. Safari doesn't let a page on another site test as fast as Cloudflare's own site or a speed test app. For an accurate reading:"));
+      const links = el("div", "accurate-links");
+      const link = (text, href) => { const a = el("a", "btnlink", text); a.href = href; a.target = "_blank"; a.rel = "noopener"; links.append(a); return a; };
+      link("speed.cloudflare.com", "https://speed.cloudflare.com/");
+      link("Speedtest app", "speedtest://");
+      accurate.append(links, el("p", "note", "The Speedtest app link only works if the Ookla Speedtest app is installed."));
       const diagLine = el("p", "note diag", "");
-      body.append(row, status, diagLine);
+      body.append(row, status, accurate, diagLine);
 
       const view = () => {
         if (!again.isConnected) { speedViews.delete(view); return; }
@@ -888,9 +913,9 @@
         diagLine.textContent = g && g.engine && !speed.running ? `${g.engine} · connection ${g.proto} · ${g.samples} ping samples · ${g.errors} errors` : "";
         status.textContent = speed.running ? speed.phase
           : speed.error ? "The speed test server couldn't be reached. Check your connection and try again."
-          : speed.at ? (speed.quick ? "Quick test" : "Full test") +
+          : speed.at ? (speed.quick ? "Quick test" : "Full test") + (speed.stalled ? " (stopped early: a request stalled)" : "") +
               ` at ${new Date(speed.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` +
-              (speed.isp ? ` on ${speed.isp}` : "") + (speed.loadedDown ? `. Ping while downloading ${Math.round(speed.loadedDown)} ms` +
+              (speed.isp ? ` on ${speed.isp.replace(/\.$/, "")}` : "") + (speed.loadedDown ? `. Ping while downloading ${Math.round(speed.loadedDown)} ms` +
               (speed.loadedUp ? `, while uploading ${Math.round(speed.loadedUp)} ms` : "") : "") +
               (speed.quick ? ". Run again for the full test, the same one speed.cloudflare.com runs." : ".")
           : "";
