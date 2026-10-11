@@ -39,8 +39,26 @@ Location and ZIP code are based on your provider's network, so they're approxima
 
 **Map:** the map beside Location, ZIP code and Local IP. Tap it for a larger map. It uses OpenStreetMap and shows the approximate area of your provider's network, not your exact position.
 
-**Speed test:** the middle button shows download ↓ and upload ↑ speeds in Mbps. When the app opens, it runs quick rounds (about 5–7 MB each) until two rounds in a row agree within 15%, up to 4 rounds, then stops and shows their average. It tests again only when your IP changes or the result is over 30 minutes old. Tap the button for ping and jitter, and tap **Run again** there for a full test (about 10–40 MB). It uses Cloudflare's speed test servers.
+**Speed test:** the middle button shows download ↓ and upload ↑ speeds in Mbps. When the app opens, it runs quick rounds until two rounds in a row agree within 15%, up to 4 rounds, then stops and shows their average. The first round picks an upload size that takes at least 0.7 seconds, so the reading isn't too low. A check usually uses about 15–50 MB. It tests again only when your IP changes or the result is over 30 minutes old. Tap the button for ping and jitter, and tap **Run again** there for a full test (about 10–40 MB). It uses Cloudflare's speed test servers.
 
 ## Updating
 
-Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v9`).
+Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v10`).
+
+## Privacy
+
+The page has no accounts, cookies or analytics, and sends no names, emails or device details. Your IP history and last speed result are stored only on your device. Like any website, each service below sees your IP address when the page contacts it, plus the details listed.
+
+| Service | What it's used for | What it receives |
+|---|---|---|
+| GitHub Pages | Hosts the page | Your IP |
+| ipwho.is (backups: ipapi.co, ipinfo.io) | IP, provider, location | Your IP |
+| api.ipapi.is | VPN check and network type | Your IP |
+| api6.ipify.org | IPv6 address | Your IP |
+| dns.google (backup: cloudflare-dns.com) | Hostname | Your IP, as the name being looked up |
+| api.open-meteo.com | Weather | Your IP and the approximate coordinates of your IP |
+| tile.openstreetmap.org | Map pictures | Your IP and which map area is shown |
+| cdnjs.cloudflare.com | Map code (Leaflet) | Your IP |
+| speed.cloudflare.com | Speed test | Your IP, plus blank test data |
+
+Each service handles its records under its own privacy policy.

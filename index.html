@@ -134,7 +134,7 @@
   .nettype.caution { color: var(--caution); background: color-mix(in srgb, var(--caution) 16%, transparent); }
 
   /* Rows keep their natural height; any spare screen height is shared out between them. */
-  .grid { flex: 1; grid-auto-rows: auto; align-content: stretch; }
+  .grid { flex: 1 0 auto; grid-auto-rows: auto; align-content: stretch; }
   .cell { align-content: center; }
   /* Taller phones (e.g. the Home Screen app): slightly larger text to use the extra height. */
   @media (max-width: 699px) and (min-height: 740px) {
@@ -202,15 +202,15 @@
   /* Tablets (iPad): fill the whole screen and scale everything up. */
   @media (min-width: 700px) and (min-height: 700px) {
     .screen {
-      height: 100%; max-width: none; gap: 28px;
+      min-height: 100%; max-width: none; gap: 22px;
       padding: calc(env(safe-area-inset-top, 0px) + 36px) 44px calc(env(safe-area-inset-bottom, 0px) + 32px);
     }
     .label, .status { font-size: 13px; }
     .dot { width: 10px; height: 10px; }
     :root { --ip-max: 112px; }
     .ip6 { font-size: 16px; }
-    .grid { flex: 1; grid-auto-rows: minmax(min-content, 1fr); border-radius: 20px; }
-    .cell { padding: 22px 26px; gap: 10px; align-content: center; }
+    .grid { border-radius: 20px; }
+    .cell { padding: 16px 26px; gap: 8px; align-content: center; }
     .cell .v { font-size: 26px; }
     .cell .v.mono { font-size: 28px; }
     .cell .sub { font-size: 16px; }
@@ -237,10 +237,16 @@
   }
   /* Tablet landscape: same single column, tighter so it fits the shorter screen. */
   @media (min-width: 700px) and (min-height: 700px) and (orientation: landscape) {
-    :root { --ip-max: 88px; }
-    .screen { gap: 18px; padding-top: calc(env(safe-area-inset-top, 0px) + 24px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); }
-    .cell { padding: 12px 26px; gap: 6px; }
-    button { padding: 18px 16px; }
+    :root { --ip-max: 76px; }
+    .screen { gap: 14px; padding-top: calc(env(safe-area-inset-top, 0px) + 18px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); }
+    .cell { padding: 9px 26px; gap: 4px; }
+    .cell .v { font-size: 24px; }
+    .cell .v.mono { font-size: 25px; }
+    .cell .sub { font-size: 15px; }
+    .nettype { font-size: 15px; padding: 5px 12px; }
+    .wx-icons svg { width: 30px; height: 30px; }
+    .moon svg { width: 54px; height: 54px; }
+    button { padding: 16px; }
   }
   @media (prefers-reduced-motion: reduce) { .status.busy .dot { animation: none; } button:active { transform: none; } }
 </style>
@@ -328,7 +334,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "9";
+  const APP_VERSION = "10";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -744,6 +750,21 @@
     }
     return rate;
   }
+  // Upload with growing samples until one takes at least `target` ms (or `max` bytes is reached).
+  // Small uploads finish before the connection gets up to speed and read too low.
+  async function measureUpSized(signal, ping, start, max, target) {
+    let size = start, rate = 0;
+    for (;;) {
+      const body = new Uint8Array(size);
+      const t0 = performance.now();
+      const r = await fetch(`${CF}/__up?r=${Math.random()}`, { method: "POST", body, cache: "no-store", signal });
+      await r.arrayBuffer();
+      const ms = Math.max(1, performance.now() - t0 - ping);
+      rate = size * 8 / ms / 1000;
+      if (ms >= target || size >= max) return { rate, size };
+      size = Math.min(max, size * 4);
+    }
+  }
   async function measureUp(signal, ping, sizes, onRate) {
     let rate = 0;
     for (const size of sizes) {
@@ -759,7 +780,7 @@
   }
 
   // One shared speed result, shown on the main button and in the panel.
-  // The automatic test is short (about 5–7 MB); the panel's "Run again" runs the full test.
+  // The automatic test uses quick rounds; the panel's "Run again" runs the full test.
   const speed = { down: null, up: null, ping: null, jitter: null, phase: "", running: false, error: false, at: 0, ip: "" };
   const SPEED_KEY = "myip-speed";
   try { Object.assign(speed, JSON.parse(localStorage.getItem(SPEED_KEY)) || {}, { running: false, phase: "" }); } catch {}
@@ -790,14 +811,19 @@
       const { ping, jitter } = await measurePing(signal, quick ? 5 : 9);
       Object.assign(speed, { ping, jitter });
       const downs = [], ups = [];
+      let upSize = 1e6; // the first quick round finds the right upload size; later rounds reuse it
       const maxRounds = quick ? 4 : 1;
       for (let i = 0; i < maxRounds; i++) {
         speed.phase = quick ? `Round ${i + 1}: download…` : "Measuring download…"; renderSpeed();
         downs.push(await measureDown(signal, quick ? [1e5, 1e6, 5e6] : [1e5, 1e6, 1e7, 2.5e7],
           quick ? () => {} : v => { speed.down = v; renderSpeed(); }));
         speed.phase = quick ? `Round ${i + 1}: upload…` : "Measuring upload…"; renderSpeed();
-        ups.push(await measureUp(signal, ping, quick ? [1e5, 1e6] : [1e5, 1e6, 5e6, 1e7],
-          quick ? () => {} : v => { speed.up = v; renderSpeed(); }));
+        if (quick) {
+          const u = await measureUpSized(signal, ping, upSize, i === 0 ? 1e7 : upSize, 700);
+          upSize = u.size; ups.push(u.rate);
+        } else {
+          ups.push(await measureUp(signal, ping, [1e5, 1e6, 5e6, 1e7], v => { speed.up = v; renderSpeed(); }));
+        }
         const n = downs.length;
         speed.rounds = n;
         if (n >= 2 && close(downs[n - 1], downs[n - 2]) && close(ups[n - 1], ups[n - 2])) break;
