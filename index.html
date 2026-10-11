@@ -344,7 +344,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "25";
+  const APP_VERSION = "26";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -446,6 +446,10 @@
   const HOST_MOBILE = /(^|[.-])(wireless|mobile|mobility|cellular|lte|4g|5g|gprs|umts|wap|mob)([.-]|$)/i;
   const HOST_HOME = /(^|[.-])(hsia|dsl|adsl|vdsl|cable|fiber|fibre|ftth|fttp|fios|res|resi|residential|dyn|dynamic|dhcp|cpe|broadband|hsd\d*|home)([.-]|\d|$)/i;
 
+  // Home internet providers that lookup services sometimes list as data centers. These count as
+  // residential unless the address is flagged as a VPN, proxy or Tor.
+  const KNOWN_HOME = /(atlas networks)/i;
+
   // Returns [colour, label]. Colours: "alert" red, "caution" amber, "good" green, "" grey.
   function networkType(info, db) {
     const sec = info.security || {};
@@ -454,6 +458,7 @@
     if ((db && db.is_tor) || sec.tor) return ["alert", "Tor"];
     if ((db && db.is_vpn) || sec.vpn) return ["alert", "VPN"];
     if ((db && db.is_proxy) || sec.proxy) return ["alert", "Proxy"];
+    if (KNOWN_HOME.test(name)) return ["good", "Residential"];
     if (RELAY.test(name)) return ["caution", "Relay / CDN"];
     if ((db && db.is_datacenter) || sec.hosting || type === "hosting" || HOSTING.test(name)) return ["caution", "Data center"];
     if (type === "education" || EDUCATION.test(name)) return ["", "Education"];
@@ -478,8 +483,9 @@
     if ((db && db.is_tor) || sec.tor) return ["alert", "Tor", "Tor exit node"];
     if ((db && db.is_vpn) || sec.vpn) return ["alert", "Likely", vpnName ? vpnName : "Listed as a VPN server"];
     if ((db && db.is_proxy) || sec.proxy) return ["alert", "Likely", "Listed as a proxy"];
-    if (RELAY.test(name)) return ["caution", "Likely", "iCloud Private Relay or VPN"];
-    if ((db && db.is_datacenter) || sec.hosting || HOSTING.test(name)) return ["caution", "Likely", "Data-center network"];
+    const knownHome = KNOWN_HOME.test(name);
+    if (!knownHome && RELAY.test(name)) return ["caution", "Likely", "iCloud Private Relay or VPN"];
+    if (!knownHome && ((db && db.is_datacenter) || sec.hosting || HOSTING.test(name))) return ["caution", "Likely", "Data-center network"];
 
     const here = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const a = utcOffsetMinutes(here), b = info.tz ? utcOffsetMinutes(info.tz) : null;
