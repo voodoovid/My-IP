@@ -86,13 +86,12 @@
   .cell .v { font: 600 16px/1.3 var(--sans); overflow-wrap: anywhere; }
   .cell .v.mono { font-family: var(--mono); font-size: 16px; }
   .cell .sub { font: 400 12px/1.35 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
-  /* The map sits in the right column beside Location, ZIP code and Local IP, as a square. */
-  .mapcell { grid-column: 2; grid-row: span 3; container-type: size; display: grid; place-items: center; padding: 10px; min-height: 0; }
+  /* The map fills the right column beside Location, ZIP code and Local IP. */
+  .mapcell { grid-column: 2; grid-row: span 3; position: relative; padding: 0; min-height: 120px; }
   #locCell { grid-column: 1; }
   .minimap {
-    width: min(100cqw, 100cqh); aspect-ratio: 1; border-radius: 10px; overflow: hidden; pointer-events: none;
-    border: 1px solid var(--line); background: var(--bg);
-    position: relative; z-index: 0; isolation: isolate;
+    position: absolute; inset: 0; overflow: hidden; pointer-events: none; background: var(--bg);
+    z-index: 0; isolation: isolate;
   }
   .minimap:empty { visibility: hidden; }
   .minimap .leaflet-control-attribution { font-size: 7px; line-height: 1.2; padding: 0 3px; background: rgb(255 255 255 / .7); }
@@ -114,7 +113,19 @@
   .nettype.good { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
   .nettype.caution { color: var(--caution); background: color-mix(in srgb, var(--caution) 16%, transparent); }
 
-  .spacer { flex: 1; }
+  /* Rows keep their natural height; any spare screen height is shared out between them. */
+  .grid { flex: 1; grid-auto-rows: auto; align-content: stretch; }
+  .cell { align-content: center; }
+  /* Taller phones (e.g. the Home Screen app): slightly larger text to use the extra height. */
+  @media (max-width: 699px) and (min-height: 740px) {
+    :root { --ip-max: 52px; }
+    .screen { gap: 14px; }
+    .cell .v { font-size: 18px; }
+    .cell .v.mono { font-size: 18px; }
+    .cell .sub { font-size: 13px; }
+    .label { font-size: 12px; }
+    button { padding-block: 16px; }
+  }
 
   footer { display: grid; gap: 10px; }
   .actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
@@ -174,7 +185,6 @@
       height: 100%; max-width: none; gap: 28px;
       padding: calc(env(safe-area-inset-top, 0px) + 36px) 44px calc(env(safe-area-inset-bottom, 0px) + 32px);
     }
-    .spacer { display: none; }
     .label, .status { font-size: 13px; }
     .dot { width: 10px; height: 10px; }
     :root { --ip-max: 112px; }
@@ -192,8 +202,6 @@
     button { font-size: 21px; padding: 22px 16px; border-radius: 16px; }
     .meta { font-size: 14px; }
     .histline { font-size: 15px; padding: 6px 12px; }
-    .mapcell { padding: 16px; }
-    .minimap { border-radius: 14px; }
     .minimap .leaflet-control-attribution { font-size: 9px; }
     .sheet { left: 50%; right: auto; bottom: auto; top: 50%; transform: translate(-50%, -50%);
       width: min(760px, 90vw); max-height: 86%; border-radius: 20px; padding: 24px; }
@@ -271,8 +279,6 @@
     </div>
   </section>
 
-  <div class="spacer"></div>
-
   <footer>
     <div class="actions">
       <button class="primary" id="refresh" type="button">Refresh</button>
@@ -294,7 +300,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "7";
+  const APP_VERSION = "8";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -576,6 +582,8 @@
     return leafletReady;
   }
   let miniMap = null, miniDot = null;
+  // Keep the map filling its box when the screen rotates or the layout changes.
+  new ResizeObserver(() => { if (miniMap) miniMap.invalidateSize(); }).observe($("minimap"));
   async function showMiniMap(info) {
     const box = $("minimap");
     if (!info.lat || !info.lon) { box.style.visibility = "hidden"; return; }
@@ -592,7 +600,7 @@
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap" }).addTo(miniMap);
         miniDot = L.circleMarker(pos, { radius: 5, color: "#ffffff", weight: 2, fillColor: color, fillOpacity: 1 }).addTo(miniMap);
       }
-      miniMap.setView(pos, 9); miniDot.setLatLng(pos);
+      miniMap.setView(pos, 10); miniDot.setLatLng(pos);
       miniMap.invalidateSize();
     } catch { box.style.visibility = "hidden"; }
   }
@@ -689,14 +697,19 @@
   async function runSpeed(quick) {
     if (speed.running) return;
     speedRun = new AbortController(); const { signal } = speedRun;
-    Object.assign(speed, { running: true, error: false, down: null, up: null, ping: null, jitter: null, phase: "Measuring ping…" });
+    // A repeat quick test keeps showing the last numbers until the new ones are ready.
+    Object.assign(speed, { running: true, error: false, phase: "Measuring ping…" },
+      quick && speed.down != null ? {} : { down: null, up: null, ping: null, jitter: null });
+    const live = quick ? () => {} : null;
     renderSpeed();
     try {
       const { ping, jitter } = await measurePing(signal, quick ? 5 : 9);
-      Object.assign(speed, { ping, jitter, phase: "Measuring download…" }); renderSpeed();
-      speed.down = await measureDown(signal, quick ? [1e5, 1e6, 5e6] : [1e5, 1e6, 1e7, 2.5e7], v => { speed.down = v; renderSpeed(); });
-      speed.phase = "Measuring upload…"; renderSpeed();
-      speed.up = await measureUp(signal, ping, quick ? [1e5, 1e6] : [1e5, 1e6, 5e6, 1e7], v => { speed.up = v; renderSpeed(); });
+      if (!quick) Object.assign(speed, { ping, jitter });
+      speed.phase = "Measuring download…"; renderSpeed();
+      const down = await measureDown(signal, quick ? [1e5, 1e6, 5e6] : [1e5, 1e6, 1e7, 2.5e7], live || (v => { speed.down = v; renderSpeed(); }));
+      speed.phase = "Measuring upload…"; speed.down = down; renderSpeed();
+      const up = await measureUp(signal, ping, quick ? [1e5, 1e6] : [1e5, 1e6, 5e6, 1e7], live || (v => { speed.up = v; renderSpeed(); }));
+      Object.assign(speed, { ping, jitter, down, up });
       Object.assign(speed, { at: Date.now(), ip: current ? current.ip : "", isp: current ? current.isp : "", quick: !!quick });
       try { localStorage.setItem(SPEED_KEY, JSON.stringify({ down: speed.down, up: speed.up, ping: speed.ping, jitter: speed.jitter, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick })); } catch {}
     } catch {
@@ -706,11 +719,20 @@
       speed.running = false; speed.phase = ""; speedRun = null; renderSpeed();
     }
   }
-  // Run the short test when the app opens, and again when the IP changes or the last result is over 30 minutes old.
-  function autoSpeed(info) {
-    if (speed.running) return;
-    if (speed.ip === info.ip && Date.now() - speed.at < 30 * 60 * 1000) return;
-    runSpeed(true);
+  // While the app is on screen, run the quick test, wait 10 seconds, and repeat.
+  // It stops when the app goes to the background and restarts when it comes back.
+  const SPEED_EVERY = 10 * 1000;
+  let speedTimer = null, speedLoopId = 0;
+  async function speedLoop() {
+    const id = ++speedLoopId;
+    clearTimeout(speedTimer);
+    if (document.hidden) return;
+    await runSpeed(true);
+    if (id === speedLoopId && !document.hidden) speedTimer = setTimeout(speedLoop, SPEED_EVERY);
+  }
+  function stopSpeedLoop() {
+    speedLoopId++; clearTimeout(speedTimer);
+    if (speedRun && speed.running) speedRun.abort();
   }
 
   function openSpeed() {
@@ -735,8 +757,8 @@
         again.disabled = speed.running; again.textContent = speed.running ? "Testing…" : "Run again";
         status.textContent = speed.running ? speed.phase
           : speed.error ? "The speed test server couldn't be reached. Check your connection and try again."
-          : speed.at ? `${speed.quick ? "Quick test" : "Full test"} at ${new Date(speed.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` +
-              (speed.isp ? ` on ${speed.isp}` : "") + ". Run again for a full test (about 10–40 MB of data)."
+          : speed.at ? `${speed.quick ? "Quick test" : "Full test"} at ${new Date(speed.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}` +
+              (speed.isp ? ` on ${speed.isp}` : "") + ". A quick test repeats every 10 seconds while the app is open. Run again for a full test."
           : "";
       };
       speedViews.add(view);
@@ -798,7 +820,7 @@
     recordHist(info);
     showWeather(info);
     showMiniMap(info);
-    autoSpeed(info);
+    if (!speed.running) speedLoop();
     reverseDns(info.ip).then(h => { if (current === info) $("domain").textContent = h || info.domain || ""; });
     $("copy").disabled = false;
     setStatus("ok", "Online");
@@ -849,7 +871,10 @@
     setTimeout(() => ($("copy").textContent = "Copy IP"), 1500);
   });
   // Re-check when you come back to the app (e.g. after switching Wi-Fi / mobile data or turning a VPN on).
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) { checkForUpdate(); lookup(); } });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stopSpeedLoop();
+    else { checkForUpdate(); lookup(); }
+  });
 
   lookup();
 </script>

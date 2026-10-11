@@ -37,10 +37,10 @@ Location and ZIP code are based on your provider's network, so they're approxima
 
 **IP history:** tap the line under the IP. It lists the addresses this device has seen, with dates, and is stored only on the device (clearing Safari's website data clears it).
 
-**Map:** the square map beside Location, ZIP code and Local IP. Tap it for a larger map. It uses OpenStreetMap and shows the approximate area of your provider's network, not your exact position.
+**Map:** the map beside Location, ZIP code and Local IP. Tap it for a larger map. It uses OpenStreetMap and shows the approximate area of your provider's network, not your exact position.
 
-**Speed test:** the middle button runs a quick test (about 5–7 MB of data) when the app opens, and shows download ↓ and upload ↑ speeds in Mbps. It runs again when your IP changes or the result is over 30 minutes old. Tap it for ping and jitter, and tap **Run again** there for a full test (about 10–40 MB). It uses Cloudflare's speed test servers.
+**Speed test:** the middle button shows download ↓ and upload ↑ speeds in Mbps. While the app is on screen, a quick test (about 5–7 MB of data) runs, then repeats 10 seconds after it finishes, which is roughly 2 GB per hour. It pauses when the app is in the background or the screen is locked. Tap the button for ping and jitter, and tap **Run again** there for a full test (about 10–40 MB). It uses Cloudflare's speed test servers.
 
 ## Updating
 
-Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v7`).
+Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v8`).
