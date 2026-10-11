@@ -27,4 +27,6 @@ Location and ZIP code are based on your provider's network, so they're approxima
 
 **VPN check:** the page asks ipapi.is (a free VPN and proxy database), then makes its own checks on your phone. It looks for provider names that belong to data centers, VPN companies or iCloud Private Relay, and compares your phone's time zone with the IP's. It shows *Not detected*, *Possible* or *Likely*. That's a best guess and can't be certain.
 
+**Network type:** shown under the AS number as *Residential*, *Mobile network*, *Business* or *Data center*. It comes from ipapi.is's classification of the company that owns the address, or from well-known provider names when that isn't available.
+
 **Local IP:** Safari doesn't give web pages access to your phone's local address, so on iPhone this usually shows *Hidden*, with a pointer to Settings › Wi‑Fi › ⓘ, where you can see it.
