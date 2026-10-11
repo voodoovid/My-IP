@@ -344,7 +344,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "21";
+  const APP_VERSION = "22";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -767,17 +767,16 @@
   // Cloudflare is switched off (logAimApiUrl: null), and the packet loss test (which needs another
   // server) is left out.
   // Each direction runs requests of growing size, and stops growing once requests take over a second.
+  // Automatic rough check: a few seconds, about 20 MB each way at most. The full test only runs on request.
   const QUICK_TEST = [
     { type: "latency", numPackets: 1 },
     { type: "download", bytes: 1e5, count: 1, bypassMinDuration: true },
-    { type: "latency", numPackets: 20 },
-    { type: "download", bytes: 1e6, count: 4 },
-    { type: "download", bytes: 1e7, count: 4 },
-    { type: "download", bytes: 2.5e7, count: 3 },
-    { type: "upload", bytes: 1e5, count: 4 },
-    { type: "upload", bytes: 1e6, count: 4 },
-    { type: "upload", bytes: 1e7, count: 3 },
-    { type: "upload", bytes: 2.5e7, count: 2 }
+    { type: "latency", numPackets: 10 },
+    { type: "download", bytes: 1e6, count: 2 },
+    { type: "download", bytes: 1e7, count: 2 },
+    { type: "upload", bytes: 1e5, count: 2 },
+    { type: "upload", bytes: 1e6, count: 2 },
+    { type: "upload", bytes: 1e7, count: 2 }
   ];
   const FULL_TEST = [ // the same sequence speed.cloudflare.com uses, without packet loss
     { type: "latency", numPackets: 2 },
@@ -819,7 +818,9 @@
       const Engine = await loadEngine();
       const engine = new Engine({ autoStart: false, logAimApiUrl: null, measurements: quick ? QUICK_TEST : FULL_TEST,
         downloadApiUrl: `${CF}/__down`, uploadApiUrl: `${CF}/__up`,
-        bandwidthPercentile: 0.9, latencyPercentile: 0.5 });
+        bandwidthPercentile: 0.9, latencyPercentile: 0.5,
+        // The rough check skips the extra ping measurements during transfers, to keep it short.
+        ...(quick ? { measureDownloadLoadedLatency: false, measureUploadLoadedLatency: false } : {}) });
       const r = () => engine.results;
       const mbps = bps => bps ? bps / 1e6 : null;
       engine.onError = () => { errors++; };
