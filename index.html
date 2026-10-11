@@ -179,10 +179,10 @@
   #map { height: min(60vh, 520px); border-radius: 12px; border: 1px solid var(--line); background: var(--bg); }
   .speedrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: stretch; }
   .speedrow > button { min-width: 100px; padding: 0 14px; }
-  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  .stat { background: var(--panel); padding: 10px 9px; display: grid; gap: 5px; min-width: 0; }
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .stat { background: var(--panel); padding: 10px 7px; display: grid; gap: 5px; min-width: 0; }
   .stat .label { font-size: 10px; letter-spacing: .08em; }
-  .stat .num { font: 700 22px/1 var(--mono); font-variant-numeric: tabular-nums; }
+  .stat .num { font: 700 20px/1 var(--mono); font-variant-numeric: tabular-nums; }
   .stat .unit { font: 400 12px/1 var(--mono); color: var(--muted); }
   .hist-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   .hist-list li { background: var(--panel); padding: 11px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; }
@@ -336,7 +336,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "14";
+  const APP_VERSION = "15";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -807,10 +807,10 @@
       const short = v => v >= 10 ? String(Math.round(v)) : v.toFixed(1);
       main.textContent = `↓${short(speed.down)} ↑${speed.up != null ? short(speed.up) : "…"}`;
       unit.textContent = speed.running ? "testing…"
-        : "Mbps" + (speed.jitter != null ? ` · jitter ${Math.round(speed.jitter)} ms` : ""); unit.hidden = false;
+        : "Mbps" + (speed.ping != null ? ` · ping ${Math.round(speed.ping)} ms` : ""); unit.hidden = false;
     } else { main.textContent = "Speed test"; unit.hidden = true; }
     $("speed").setAttribute("aria-label", speed.down != null ? `Speed test: download ${fmtMbps(speed.down)}, upload ${speed.up != null ? fmtMbps(speed.up) : "pending"} megabits per second` +
-      (speed.jitter != null ? `, jitter ${Math.round(speed.jitter)} milliseconds` : "") : "Speed test");
+      (speed.ping != null ? `, ping ${Math.round(speed.ping)} milliseconds` : "") : "Speed test");
     speedViews.forEach(f => f());
   }
 
@@ -872,7 +872,9 @@
         const c = el("div", "stat"), n = el("span", "num", "—"), u = el("span", "unit", unit);
         c.append(el("span", "label", label), n, u); stats.append(c); return [n, u];
       };
-      const [down] = stat("Download", "Mbps"), [up] = stat("Upload", "Mbps"), [png, pngUnit] = stat("Ping", "ms");
+      const narrow = matchMedia("(max-width: 699px)").matches; // phones: shorter labels so four boxes fit
+      const [down] = stat(narrow ? "Down" : "Download", "Mbps"), [up] = stat(narrow ? "Up" : "Upload", "Mbps"),
+        [png] = stat("Ping", "ms"), [jit] = stat("Jitter", "ms");
       const again = el("button", "primary", "Run again"); again.type = "button";
       const row = el("div", "speedrow"); row.append(again, stats);
       const status = el("p", "note", "");
@@ -883,7 +885,7 @@
         down.textContent = speed.down != null ? fmtMbps(speed.down) : "—";
         up.textContent = speed.up != null ? fmtMbps(speed.up) : "—";
         png.textContent = speed.ping != null ? Math.round(speed.ping) : "—";
-        pngUnit.textContent = speed.jitter != null ? `ms · ±${Math.round(speed.jitter)}` : "ms";
+        jit.textContent = speed.jitter != null ? Math.round(speed.jitter) : "—";
         again.disabled = speed.running; again.textContent = speed.running ? "Testing…" : "Run again";
         status.textContent = speed.running ? speed.phase
           : speed.error ? "The speed test server couldn't be reached. Check your connection and try again."
