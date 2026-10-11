@@ -23,6 +23,10 @@
     --accent-ink: #ffffff;
     --good: #0d7a62;
     --caution: #9a6400;
+    --sun: #e09a00;
+    --water: #2f7fc1;
+    --moon-lit: #ece6cf;
+    --moon-dark: #3a4643;
     --alert: #b23a1c;
     --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
@@ -34,6 +38,7 @@
       --bg: #0b1211; --panel: #13201e; --fg: #e4edeb; --muted: #8ea19c;
       --line: #223935; --accent: #3fd1ab; --accent-ink: #062019;
       --good: #3fd1ab; --caution: #f2c14e; --alert: #ff8a6b;
+      --sun: #f5c04a; --water: #6fb3ee; --moon-lit: #f1ecd6; --moon-dark: #24302e;
       color-scheme: dark;
     }
   }
@@ -97,6 +102,21 @@
   .minimap .leaflet-control-attribution { font-size: 7px; line-height: 1.2; padding: 0 3px; background: rgb(255 255 255 / .7); }
   @media (prefers-color-scheme: dark) { .minimap .leaflet-tile-pane { filter: brightness(.82) contrast(1.05); } }
   .cell.tap { cursor: pointer; }
+  .wxcell { grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 8px; }
+  .wx-text { display: grid; gap: inherit; min-width: 0; align-content: center; }
+  .wx-line { display: flex; align-items: center; gap: 6px; }
+  .wx-icons { display: inline-flex; align-items: center; gap: 4px; }
+  .wx-icons svg { width: 22px; height: 22px; flex: none; }
+  .moon { display: grid; justify-items: center; gap: 3px; }
+  .moon svg { width: 34px; height: 34px; display: block; }
+  .moon .moon-name { font: 500 9px/1.15 var(--mono); color: var(--muted); text-align: center; max-width: 64px; }
+  /* Phones: the moon sits small in the box's top-right corner (its name is in the tooltip). */
+  @media (max-width: 699px) {
+    .wxcell { grid-template-columns: minmax(0, 1fr); position: relative; }
+    .moon { position: absolute; top: 7px; right: 10px; }
+    .moon svg { width: 24px; height: 24px; }
+    .moon .moon-name { display: none; }
+  }
   .cell.tap:active { background: color-mix(in srgb, var(--panel) 92%, var(--fg)); }
   .cell.tap:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .flag { font-size: 19px; line-height: 1; margin-right: 6px; vertical-align: -2px; }
@@ -198,6 +218,10 @@
     .flag { font-size: 30px; margin-right: 10px; }
     .verdict { font-size: 26px; gap: 12px; }
     .verdict::before { width: 14px; height: 14px; }
+    .wx-icons svg { width: 34px; height: 34px; }
+    .wx-line { gap: 10px; }
+    .moon svg { width: 64px; height: 64px; }
+    .moon .moon-name { font-size: 12px; max-width: 120px; }
     .actions { gap: 16px; }
     button { font-size: 21px; padding: 22px 16px; border-radius: 16px; }
     .meta { font-size: 14px; }
@@ -272,10 +296,14 @@
       <span class="v mono" id="tz">—</span>
       <span class="sub" id="tzName"></span>
     </div>
-    <div class="cell">
-      <span class="label">Weather</span>
-      <span class="v mono" id="wx">—</span>
-      <span class="sub" id="wxWhy"></span>
+    <div class="cell wxcell">
+      <div class="wx-text">
+        <span class="label">Weather</span>
+        <span class="v mono wx-line"><span id="wx">—</span><span class="wx-icons" id="wxIcons"></span></span>
+        <span class="sub" id="wxWhy"></span>
+        <span class="sub" id="wxWind"></span>
+      </div>
+      <span class="moon" id="moon" role="img"></span>
     </div>
   </section>
 
@@ -300,7 +328,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "8";
+  const APP_VERSION = "9";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -481,22 +509,76 @@
   }
 
   // ---------- Weather (Open-Meteo, free, no key) ----------
-  const WX = [[[0], "Clear"], [[1], "Mostly clear"], [[2], "Partly cloudy"], [[3], "Cloudy"], [[45, 48], "Fog"],
-    [[51, 53, 55, 56, 57], "Drizzle"], [[61, 63, 65, 66, 67], "Rain"], [[71, 73, 75, 77], "Snow"],
-    [[80, 81, 82], "Showers"], [[85, 86], "Snow showers"], [[95, 96, 99], "Thunderstorm"]];
+  const WX = [[[0], "Clear", "clear"], [[1], "Mostly clear", "partly"], [[2], "Partly cloudy", "partly"], [[3], "Cloudy", "cloud"],
+    [[45, 48], "Fog", "fog"], [[51, 53, 55, 56, 57], "Drizzle", "rain"], [[61, 63, 65, 66, 67], "Rain", "rain"],
+    [[71, 73, 75, 77], "Snow", "snow"], [[80, 81, 82], "Showers", "rain"], [[85, 86], "Snow showers", "snow"],
+    [[95, 96, 99], "Thunderstorm", "storm"]];
+
+  // Small line icons, drawn in the page's colours.
+  const CLOUD = '<path d="M7 18h10a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.2 11.1 3.5 3.5 0 0 0 7 18z" fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linejoin="round"/>';
+  const SUN_RAYS = '<g stroke="var(--sun)" stroke-width="1.8" stroke-linecap="round"><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></g>';
+  const ICONS = {
+    clearDay: `<circle cx="12" cy="12" r="4.2" fill="var(--sun)"/>${SUN_RAYS}`,
+    clearNight: '<path d="M15.5 3.5a8.5 8.5 0 1 0 5 13.6A7 7 0 0 1 15.5 3.5z" fill="var(--moon-lit)" stroke="var(--muted)" stroke-width="1.2"/>',
+    partlyDay: '<circle cx="9" cy="9" r="3.4" fill="var(--sun)"/><g stroke="var(--sun)" stroke-width="1.6" stroke-linecap="round"><path d="M9 2.2v1.4M2.2 9h1.4M4.2 4.2l1 1M13.8 4.2l-1 1"/></g>' + CLOUD.replace('fill="none"', 'fill="var(--panel)"'),
+    partlyNight: '<path d="M11 3.2a5 5 0 1 0 3.3 8.4A4.2 4.2 0 0 1 11 3.2z" fill="var(--moon-lit)" stroke="var(--muted)" stroke-width="1"/>' + CLOUD.replace('fill="none"', 'fill="var(--panel)"'),
+    cloud: CLOUD,
+    fog: '<g stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round"><path d="M4 9h16M3 13h18M5 17h14"/></g>',
+    rain: CLOUD.replace('M7 18h10', 'M7 15h10').replace('A3.5 3.5 0 0 0 7 18z', 'A3.5 3.5 0 0 0 7 15z').replace('a4 4 0 0 0 .6-7.96', 'a4 4 0 0 0 .6-7.96') +
+      '<g stroke="var(--water)" stroke-width="1.8" stroke-linecap="round"><path d="M8.5 18l-1 3M12.5 18l-1 3M16.5 18l-1 3"/></g>',
+    snow: CLOUD.replace('M7 18h10', 'M7 15h10').replace('A3.5 3.5 0 0 0 7 18z', 'A3.5 3.5 0 0 0 7 15z') +
+      '<g fill="var(--water)"><circle cx="8" cy="19" r="1.2"/><circle cx="12" cy="21" r="1.2"/><circle cx="16" cy="19" r="1.2"/></g>',
+    storm: CLOUD.replace('M7 18h10', 'M7 15h10').replace('A3.5 3.5 0 0 0 7 18z', 'A3.5 3.5 0 0 0 7 15z') +
+      '<path d="M12.5 15.5l-2.5 4h3l-1.5 3.5" fill="none" stroke="var(--sun)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+    wind: '<g fill="none" stroke="var(--muted)" stroke-width="1.8" stroke-linecap="round"><path d="M3 9h11a2.5 2.5 0 1 0-2.5-2.5"/><path d="M3 13h15a2.5 2.5 0 1 1-2.5 2.5"/><path d="M3 17h7"/></g>'
+  };
+  const icon = (name, title) => `<svg viewBox="0 0 24 24" role="img" aria-label="${title}"><title>${title}</title>${ICONS[name]}</svg>`;
+
+  // ---------- Moon phase (calculated on the device, no lookup needed) ----------
+  function moonPhase(date = new Date()) {
+    const synodic = 29.530588853;
+    const ref = Date.UTC(2000, 0, 6, 18, 14); // a known new moon
+    const p = (((date - ref) / 86400000 / synodic) % 1 + 1) % 1; // 0 new, 0.5 full
+    const names = [[0.0339, "New moon"], [0.216, "Waxing crescent"], [0.284, "First quarter"], [0.466, "Waxing gibbous"],
+      [0.534, "Full moon"], [0.716, "Waning gibbous"], [0.784, "Last quarter"], [0.966, "Waning crescent"], [1.01, "New moon"]];
+    return { p, lit: Math.round((1 - Math.cos(2 * Math.PI * p)) / 2 * 100), name: names.find(([lim]) => p < lim)[1] };
+  }
+  function moonSvg(p) {
+    const r = 10, cx = 12, cy = 12, top = `${cx} ${cy - r}`, bottom = `${cx} ${cy + r}`;
+    const rx = Math.abs(Math.cos(2 * Math.PI * p)) * r;
+    const waxing = p < 0.5;
+    // Lit half: right side while waxing, left side while waning. The terminator is an ellipse arc.
+    const litSweep = waxing ? 1 : 0;
+    const termSweep = (p < 0.25 || (p >= 0.5 && p < 0.75)) ? 0 : 1;
+    const lit = (p < 0.0339 || p > 0.966) ? "" :
+      `<path d="M${top} A${r} ${r} 0 0 ${litSweep} ${bottom} A${rx.toFixed(2)} ${r} 0 0 ${termSweep} ${top}z" fill="var(--moon-lit)"/>`;
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="${cx}" cy="${cy}" r="${r}" fill="var(--moon-dark)" stroke="var(--line)" stroke-width="0.8"/>${lit}</svg>`;
+  }
+  function showMoon() {
+    const m = moonPhase();
+    $("moon").innerHTML = moonSvg(m.p) + `<span class="moon-name">${m.name}</span>`;
+    $("moon").setAttribute("aria-label", `Moon: ${m.name}, ${m.lit}% lit`);
+    $("moon").title = `${m.name} · ${m.lit}% lit`;
+  }
   async function showWeather(info) {
-    $("wx").textContent = "—"; $("wxWhy").textContent = "";
+    $("wx").textContent = "—"; $("wxWhy").textContent = ""; $("wxWind").textContent = ""; $("wxIcons").innerHTML = "";
+    showMoon();
     if (!info.lat || !info.lon) return;
     const us = ["US", "LR", "MM"].includes(String(info.cc || "").toUpperCase());
     try {
       const d = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${info.lat}&longitude=${info.lon}` +
-        `&current=temperature_2m,weather_code,wind_speed_10m` +
+        `&current=temperature_2m,weather_code,wind_speed_10m,is_day` +
         (us ? "&temperature_unit=fahrenheit&wind_speed_unit=mph" : ""));
       if (current !== info) return;
       const c = d.current;
-      const sky = (WX.find(([codes]) => codes.includes(c.weather_code)) || [, ""])[1];
+      const [, sky = "", kind = ""] = WX.find(([codes]) => codes.includes(c.weather_code)) || [];
+      const day = c.is_day !== 0;
+      const iconName = kind === "clear" ? (day ? "clearDay" : "clearNight") : kind === "partly" ? (day ? "partlyDay" : "partlyNight") : kind;
+      const windy = c.wind_speed_10m >= (us ? 15 : 24);
       $("wx").textContent = `${Math.round(c.temperature_2m)}°${us ? "F" : "C"}`;
-      $("wxWhy").textContent = [sky, `wind ${Math.round(c.wind_speed_10m)} ${us ? "mph" : "km/h"}`].filter(Boolean).join(" · ");
+      $("wxIcons").innerHTML = (iconName ? icon(iconName, sky) : "") + (windy ? icon("wind", "Windy") : "");
+      $("wxWhy").textContent = sky;
+      $("wxWind").textContent = `Wind ${Math.round(c.wind_speed_10m)} ${us ? "mph" : "km/h"}`;
     } catch { $("wxWhy").textContent = "Unavailable"; }
   }
 
@@ -694,24 +776,37 @@
     speedViews.forEach(f => f());
   }
 
+  // Quick test: measure ping once, then repeat download/upload rounds until two rounds in a row
+  // agree within 15% (at most 4 rounds), and show the average of those two.
+  // Full test (from the panel): one longer round.
+  const close = (a, b) => Math.abs(a - b) <= 0.15 * Math.max(a, b);
   async function runSpeed(quick) {
     if (speed.running) return;
     speedRun = new AbortController(); const { signal } = speedRun;
-    // A repeat quick test keeps showing the last numbers until the new ones are ready.
-    Object.assign(speed, { running: true, error: false, phase: "Measuring ping…" },
+    Object.assign(speed, { running: true, error: false, phase: "Measuring ping…", rounds: 0 },
       quick && speed.down != null ? {} : { down: null, up: null, ping: null, jitter: null });
-    const live = quick ? () => {} : null;
     renderSpeed();
     try {
       const { ping, jitter } = await measurePing(signal, quick ? 5 : 9);
-      if (!quick) Object.assign(speed, { ping, jitter });
-      speed.phase = "Measuring download…"; renderSpeed();
-      const down = await measureDown(signal, quick ? [1e5, 1e6, 5e6] : [1e5, 1e6, 1e7, 2.5e7], live || (v => { speed.down = v; renderSpeed(); }));
-      speed.phase = "Measuring upload…"; speed.down = down; renderSpeed();
-      const up = await measureUp(signal, ping, quick ? [1e5, 1e6] : [1e5, 1e6, 5e6, 1e7], live || (v => { speed.up = v; renderSpeed(); }));
-      Object.assign(speed, { ping, jitter, down, up });
+      Object.assign(speed, { ping, jitter });
+      const downs = [], ups = [];
+      const maxRounds = quick ? 4 : 1;
+      for (let i = 0; i < maxRounds; i++) {
+        speed.phase = quick ? `Round ${i + 1}: download…` : "Measuring download…"; renderSpeed();
+        downs.push(await measureDown(signal, quick ? [1e5, 1e6, 5e6] : [1e5, 1e6, 1e7, 2.5e7],
+          quick ? () => {} : v => { speed.down = v; renderSpeed(); }));
+        speed.phase = quick ? `Round ${i + 1}: upload…` : "Measuring upload…"; renderSpeed();
+        ups.push(await measureUp(signal, ping, quick ? [1e5, 1e6] : [1e5, 1e6, 5e6, 1e7],
+          quick ? () => {} : v => { speed.up = v; renderSpeed(); }));
+        const n = downs.length;
+        speed.rounds = n;
+        if (n >= 2 && close(downs[n - 1], downs[n - 2]) && close(ups[n - 1], ups[n - 2])) break;
+      }
+      const last2 = arr => arr.length >= 2 ? (arr[arr.length - 1] + arr[arr.length - 2]) / 2 : arr[arr.length - 1];
+      Object.assign(speed, { down: last2(downs), up: last2(ups),
+        stable: !quick || (downs.length >= 2 && close(downs.at(-1), downs.at(-2)) && close(ups.at(-1), ups.at(-2))) });
       Object.assign(speed, { at: Date.now(), ip: current ? current.ip : "", isp: current ? current.isp : "", quick: !!quick });
-      try { localStorage.setItem(SPEED_KEY, JSON.stringify({ down: speed.down, up: speed.up, ping: speed.ping, jitter: speed.jitter, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick })); } catch {}
+      try { localStorage.setItem(SPEED_KEY, JSON.stringify({ down: speed.down, up: speed.up, ping: speed.ping, jitter: speed.jitter, at: speed.at, ip: speed.ip, isp: speed.isp, quick: speed.quick, rounds: speed.rounds, stable: speed.stable })); } catch {}
     } catch {
       if (!signal.aborted) speed.error = true;
       else Object.assign(speed, JSON.parse(localStorage.getItem(SPEED_KEY) || "{}"));
@@ -719,21 +814,13 @@
       speed.running = false; speed.phase = ""; speedRun = null; renderSpeed();
     }
   }
-  // While the app is on screen, run the quick test, wait 10 seconds, and repeat.
-  // It stops when the app goes to the background and restarts when it comes back.
-  const SPEED_EVERY = 10 * 1000;
-  let speedTimer = null, speedLoopId = 0;
-  async function speedLoop() {
-    const id = ++speedLoopId;
-    clearTimeout(speedTimer);
-    if (document.hidden) return;
-    await runSpeed(true);
-    if (id === speedLoopId && !document.hidden) speedTimer = setTimeout(speedLoop, SPEED_EVERY);
+  // Test when the app opens, and again when the IP changes or the last result is over 30 minutes old.
+  function autoSpeed(info) {
+    if (speed.running || document.hidden) return;
+    if (speed.ip === info.ip && Date.now() - speed.at < 30 * 60 * 1000) return;
+    runSpeed(true);
   }
-  function stopSpeedLoop() {
-    speedLoopId++; clearTimeout(speedTimer);
-    if (speedRun && speed.running) speedRun.abort();
-  }
+  function stopSpeed() { if (speedRun && speed.running) speedRun.abort(); }
 
   function openSpeed() {
     openSheet("Speed test", body => {
@@ -757,8 +844,9 @@
         again.disabled = speed.running; again.textContent = speed.running ? "Testing…" : "Run again";
         status.textContent = speed.running ? speed.phase
           : speed.error ? "The speed test server couldn't be reached. Check your connection and try again."
-          : speed.at ? `${speed.quick ? "Quick test" : "Full test"} at ${new Date(speed.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}` +
-              (speed.isp ? ` on ${speed.isp}` : "") + ". A quick test repeats every 10 seconds while the app is open. Run again for a full test."
+          : speed.at ? (speed.quick ? `Quick test, ${speed.rounds} rounds${speed.stable ? ", stable" : ""}` : "Full test") +
+              ` at ${new Date(speed.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` +
+              (speed.isp ? ` on ${speed.isp}` : "") + ". Run again for a full test (about 10–40 MB)."
           : "";
       };
       speedViews.add(view);
@@ -820,7 +908,7 @@
     recordHist(info);
     showWeather(info);
     showMiniMap(info);
-    if (!speed.running) speedLoop();
+    autoSpeed(info);
     reverseDns(info.ip).then(h => { if (current === info) $("domain").textContent = h || info.domain || ""; });
     $("copy").disabled = false;
     setStatus("ok", "Online");
@@ -872,7 +960,7 @@
   });
   // Re-check when you come back to the app (e.g. after switching Wi-Fi / mobile data or turning a VPN on).
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden) stopSpeedLoop();
+    if (document.hidden) stopSpeed();
     else { checkForUpdate(); lookup(); }
   });
 
