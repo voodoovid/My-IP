@@ -334,7 +334,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "10";
+  const APP_VERSION = "11";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -655,15 +655,15 @@
     });
   }
 
-  // Map: Leaflet + OpenStreetMap, loaded only when first opened.
+  // Map: Leaflet (hosted in this repository, vendor/leaflet) + OpenStreetMap tiles.
   let leafletReady = null;
   function loadLeaflet() {
     if (!leafletReady) leafletReady = new Promise((ok, fail) => {
       const css = document.createElement("link");
-      css.rel = "stylesheet"; css.href = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css";
+      css.rel = "stylesheet"; css.href = "vendor/leaflet/leaflet.css";
       document.head.append(css);
       const js = document.createElement("script");
-      js.src = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js";
+      js.src = "vendor/leaflet/leaflet.js";
       js.onload = ok; js.onerror = () => { leafletReady = null; fail(); };
       document.head.append(js);
     });

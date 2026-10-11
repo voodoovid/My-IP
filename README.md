@@ -43,9 +43,12 @@ Location and ZIP code are based on your provider's network, so they're approxima
 
 ## Updating
 
-Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v10`).
+Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v11`).
 
 ## Privacy
+
+The map code (Leaflet 1.9.4, BSD 2-clause license) is hosted in this repository under `vendor/leaflet`, so it loads from GitHub Pages along with the page.
+
 
 The page has no accounts, cookies or analytics, and sends no names, emails or device details. Your IP history and last speed result are stored only on your device. Like any website, each service below sees your IP address when the page contacts it, plus the details listed.
 
@@ -58,7 +61,6 @@ The page has no accounts, cookies or analytics, and sends no names, emails or de
 | dns.google (backup: cloudflare-dns.com) | Hostname | Your IP, as the name being looked up |
 | api.open-meteo.com | Weather | Your IP and the approximate coordinates of your IP |
 | tile.openstreetmap.org | Map pictures | Your IP and which map area is shown |
-| cdnjs.cloudflare.com | Map code (Leaflet) | Your IP |
 | speed.cloudflare.com | Speed test | Your IP, plus blank test data |
 
 Each service handles its records under its own privacy policy.
