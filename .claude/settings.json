@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "TZ=America/Los_Angeles date '+Current date and time: %A, %B %-d, %Y at %-I:%M %p %Z. Start your reply with this date and time on its own line, in bold.'"
+          }
+        ]
+      }
+    ]
+  }
+}
