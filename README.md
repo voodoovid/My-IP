@@ -43,7 +43,7 @@ Location and ZIP code are based on your provider's network, so they're approxima
 
 ## Updating
 
-Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v27`).
+Home Screen apps keep their own cached copy of the page. The page checks `version.json` each time it opens or you switch back to it, and reloads itself when the number there differs from `APP_VERSION` in `index.html`. When you change the page, bump both numbers together. The current version is shown at the bottom of the page (for example `v28`).
 
 ## Privacy
 

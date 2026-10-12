@@ -43,6 +43,10 @@
     }
   }
   * { box-sizing: border-box; }
+  /* No rubber-band sliding when swiping. When everything fits on the screen, the page doesn't
+     scroll at all (the "fits" class is set by script); otherwise it scrolls without bouncing. */
+  html, body { overscroll-behavior: none; }
+  html.fits, html.fits body { overflow: hidden; }
   [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
@@ -349,7 +353,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "27";
+  const APP_VERSION = "28";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -363,6 +367,15 @@
     } catch {}
   }
   checkForUpdate();
+
+  // Lock the page in place when it fits on the screen (see the "fits" CSS rule).
+  // This script runs after the page's elements, so .screen already exists.
+  function updateFit() {
+    document.documentElement.classList.toggle("fits", document.querySelector(".screen").offsetHeight <= innerHeight + 1);
+  }
+  addEventListener("resize", updateFit);
+  new ResizeObserver(updateFit).observe(document.querySelector(".screen"));
+  updateFit();
 
   async function getJSON(url) {
     const ctrl = new AbortController();
