@@ -258,6 +258,11 @@
     .moon svg { width: 54px; height: 54px; }
     button { padding: 16px; }
   }
+  /* Home Screen app on iPad: the page runs under the status bar, and iPadOS blurs a band there,
+     so leave extra room above the first line. (Safari draws its own bar above the page.) */
+  @media (display-mode: standalone) and (min-width: 700px) and (min-height: 700px) {
+    .screen { padding-top: calc(env(safe-area-inset-top, 0px) + 40px); }
+  }
   @media (prefers-reduced-motion: reduce) { .status.busy .dot { animation: none; } button:active { transform: none; } }
 </style>
 </head>
@@ -344,7 +349,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "26";
+  const APP_VERSION = "27";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
