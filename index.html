@@ -263,9 +263,11 @@
     button { padding: 16px; }
   }
   /* Home Screen app on iPad: the page runs under the status bar, and iPadOS blurs a band there,
-     so leave extra room above the first line. (Safari draws its own bar above the page.) */
-  @media (display-mode: standalone) and (min-width: 700px) and (min-height: 700px) {
-    .screen { padding-top: calc(env(safe-area-inset-top, 0px) + 40px); }
+     so leave extra room above the first line. (Safari draws its own bar above the page.)
+     The "standalone" class is set by script: iPadOS reports Home Screen apps through
+     navigator.standalone, not the display-mode media query. */
+  @media (min-width: 700px) and (min-height: 700px) {
+    html.standalone .screen { padding-top: calc(env(safe-area-inset-top, 0px) + 40px); }
   }
   @media (prefers-reduced-motion: reduce) { .status.busy .dot { animation: none; } button:active { transform: none; } }
 </style>
@@ -353,7 +355,7 @@
 
 <script>
   // Bump this and version.json together on every change, so Home Screen apps pick up the update.
-  const APP_VERSION = "28";
+  const APP_VERSION = "29";
   const $ = id => document.getElementById(id);
 
   // Home Screen apps keep their own cached copy of the page. Ask the server for the latest
@@ -367,6 +369,10 @@
     } catch {}
   }
   checkForUpdate();
+
+  // Home Screen app? (see the "standalone" CSS rule)
+  if (navigator.standalone || matchMedia("(display-mode: standalone)").matches)
+    document.documentElement.classList.add("standalone");
 
   // Lock the page in place when it fits on the screen (see the "fits" CSS rule).
   // This script runs after the page's elements, so .screen already exists.
